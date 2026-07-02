@@ -20,10 +20,10 @@ namespace mod_confsubmissions;
  * Public integration surface for downstream conference-tools plugins
  * (mod_confprogram, mod_confscheduler, mod_confcheckin).
  *
- * This is a first-pass scaffold: the read-only accessors below have minimal
- * working implementations sufficient for downstream plugins to start
- * integrating against a stable signature; richer filtering, caching, and
- * write operations are follow-up work.
+ * Covers read accessors (submissions, speakers, tracks, optional fields) plus
+ * the write operations needed by this plugin's own screens (track CRUD,
+ * speaker/optional-field syncing on submit). Caching and pagination for large
+ * datasets are follow-up work.
  *
  * Capability contract: these methods do NOT check capabilities or context
  * themselves — they are a raw data-access layer only. Every submission
@@ -53,11 +53,10 @@ class api {
     /**
      * Returns submissions belonging to any confsubmissions instance in a course.
      *
-     * TODO: expand $filters support (e.g. cmid, trackid, status, userid) and
-     * consider pagination once the full listing screens are built.
+     * TODO: consider pagination once submission volumes get large.
      *
      * @param int $courseid The course id
-     * @param array $filters Optional filters; currently supports 'status' and 'trackid'
+     * @param array $filters Optional filters; supports 'status', 'trackid' and 'userid'
      * @return \stdClass[] Array of submission records, keyed by id
      */
     public static function get_submissions_for_course(int $courseid, array $filters = []): array {
@@ -76,6 +75,11 @@ class api {
             $params['trackid'] = $filters['trackid'];
         }
 
+        if (isset($filters['userid'])) {
+            $where[] = 'sub.userid = :userid';
+            $params['userid'] = $filters['userid'];
+        }
+
         $sql = 'SELECT sub.*
                   FROM {confsubmissions_submission} sub
                   JOIN {confsubmissions} cs ON cs.id = sub.confsubmissions
@@ -83,6 +87,37 @@ class api {
               ORDER BY sub.timecreated ASC';
 
         return $DB->get_records_sql($sql, $params);
+    }
+
+    /**
+     * Returns submissions belonging to a single confsubmissions instance.
+     *
+     * Unlike get_submissions_for_course(), this scopes to exactly one activity
+     * instance, which is what the instance's own "all submissions" listing needs
+     * (a course can contain more than one Conference Submissions activity).
+     *
+     * @param int $confsubmissionsid The confsubmissions instance id
+     * @param array $filters Optional filters; supports 'status', 'trackid' and 'userid'
+     * @return \stdClass[] Array of submission records, keyed by id
+     */
+    public static function get_submissions_for_instance(int $confsubmissionsid, array $filters = []): array {
+        global $DB;
+
+        $conditions = ['confsubmissions' => $confsubmissionsid];
+
+        if (isset($filters['status']) && $filters['status'] !== '') {
+            $conditions['status'] = $filters['status'];
+        }
+
+        if (isset($filters['trackid']) && $filters['trackid'] !== '') {
+            $conditions['trackid'] = $filters['trackid'];
+        }
+
+        if (isset($filters['userid']) && $filters['userid'] !== '') {
+            $conditions['userid'] = $filters['userid'];
+        }
+
+        return $DB->get_records('confsubmissions_submission', $conditions, 'timecreated DESC');
     }
 
     /**
@@ -134,5 +169,139 @@ class api {
             '',
             'fieldname, value'
         );
+    }
+
+    /**
+     * Returns the optional-field configuration rows for an instance, keyed by id.
+     *
+     * @param int $confsubmissionsid The confsubmissions instance id
+     * @return \stdClass[] Field configuration rows keyed by id
+     */
+    public static function get_fields(int $confsubmissionsid): array {
+        global $DB;
+
+        return $DB->get_records(
+            'confsubmissions_field',
+            ['confsubmissions' => $confsubmissionsid],
+            'sortorder ASC'
+        );
+    }
+
+    /**
+     * Returns the machine names of the optional fields enabled for an instance, in order.
+     *
+     * @param int $confsubmissionsid The confsubmissions instance id
+     * @return string[] Enabled fieldnames
+     */
+    public static function get_enabled_fieldnames(int $confsubmissionsid): array {
+        $fields = self::get_fields($confsubmissionsid);
+
+        $enabled = array_filter($fields, fn($field) => (bool) $field->enabled);
+
+        return array_values(array_map(fn($field) => $field->fieldname, $enabled));
+    }
+
+    /**
+     * Adds a new track to an instance, appended to the end of the sort order.
+     *
+     * @param int $confsubmissionsid The confsubmissions instance id
+     * @param string $name The track name
+     * @return int The id of the newly inserted track
+     */
+    public static function add_track(int $confsubmissionsid, string $name): int {
+        global $DB;
+
+        $maxsortorder = (int) $DB->get_field_sql(
+            'SELECT MAX(sortorder) FROM {confsubmissions_track} WHERE confsubmissions = ?',
+            [$confsubmissionsid]
+        );
+
+        $record = (object) [
+            'confsubmissions' => $confsubmissionsid,
+            'name'            => $name,
+            'sortorder'       => $maxsortorder + 1,
+        ];
+
+        return $DB->insert_record('confsubmissions_track', $record);
+    }
+
+    /**
+     * Deletes a track. Submissions referencing it are left with no track (trackid null)
+     * rather than being deleted.
+     *
+     * @param int $trackid The confsubmissions_track id
+     * @return bool
+     */
+    public static function delete_track(int $trackid): bool {
+        global $DB;
+
+        $DB->set_field('confsubmissions_submission', 'trackid', null, ['trackid' => $trackid]);
+
+        return $DB->delete_records('confsubmissions_track', ['id' => $trackid]);
+    }
+
+    /**
+     * Replaces the speakers attached to a submission with a new ordered set.
+     *
+     * Existing speaker rows for the submission are deleted and the given speakers are
+     * inserted in order, sortorder 0..n-1. The first speaker is always stored with
+     * role 'primary'; every subsequent speaker is stored with role 'co-presenter',
+     * regardless of any 'role' key present in the given rows, so callers do not need
+     * to compute roles themselves.
+     *
+     * Each speaker row must be an array with either a 'userid' key (an enrolled
+     * Moodle user) or 'name'/'email' keys (a manually-entered co-presenter).
+     *
+     * @param int $submissionid The confsubmissions_submission id
+     * @param array $speakers Ordered list of speaker rows
+     * @return void
+     */
+    public static function sync_speakers(int $submissionid, array $speakers): void {
+        global $DB;
+
+        $DB->delete_records('confsubmissions_speaker', ['submissionid' => $submissionid]);
+
+        $sortorder = 0;
+        foreach (array_values($speakers) as $index => $speaker) {
+            $record = (object) [
+                'submissionid' => $submissionid,
+                'userid'       => $speaker['userid'] ?? null,
+                'name'         => $speaker['name'] ?? null,
+                'email'        => $speaker['email'] ?? null,
+                'role'         => $index === 0 ? 'primary' : 'co-presenter',
+                'sortorder'    => $sortorder,
+            ];
+            $DB->insert_record('confsubmissions_speaker', $record);
+            $sortorder++;
+        }
+    }
+
+    /**
+     * Replaces the optional-field answers attached to a submission with a new set.
+     *
+     * Existing confsubmissions_fieldval rows for the submission are deleted; a row is
+     * (re)inserted only for values that are not the empty string, so a submitter
+     * clearing an optional field's answer removes the row rather than storing '' .
+     *
+     * @param int $submissionid The confsubmissions_submission id
+     * @param array $values Field values keyed by fieldname
+     * @return void
+     */
+    public static function sync_optional_fields(int $submissionid, array $values): void {
+        global $DB;
+
+        $DB->delete_records('confsubmissions_fieldval', ['submissionid' => $submissionid]);
+
+        foreach ($values as $fieldname => $value) {
+            if ($value === '' || $value === null) {
+                continue;
+            }
+
+            $DB->insert_record('confsubmissions_fieldval', (object) [
+                'submissionid' => $submissionid,
+                'fieldname'    => $fieldname,
+                'value'        => $value,
+            ]);
+        }
     }
 }

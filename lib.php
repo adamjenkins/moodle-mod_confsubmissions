@@ -45,6 +45,55 @@ function confsubmissions_supports($feature) {
 }
 
 /**
+ * The machine names of the fixed optional fields that mod_form.php exposes as
+ * toggles (confsubmissions_field.fieldname). These are not free-form custom
+ * fields; the set is closed and shared by mod_form.php, submission_form.php,
+ * and confsubmissions_field_optional_fields_from_form_data() below.
+ *
+ * @return string[]
+ */
+function confsubmissions_optional_fieldnames(): array {
+    return ['language', 'teachingcontext', 'subtopic'];
+}
+
+/**
+ * Upserts the confsubmissions_field rows for an instance from the mod_form.php
+ * checkbox data (field_language, field_teachingcontext, field_subtopic).
+ *
+ * @param int $confsubmissionsid The confsubmissions instance id
+ * @param stdClass $data Data from the settings form
+ * @return void
+ */
+function confsubmissions_sync_optional_fields(int $confsubmissionsid, stdClass $data): void {
+    global $DB;
+
+    $sortorder = 0;
+    foreach (confsubmissions_optional_fieldnames() as $fieldname) {
+        $enabled = !empty($data->{'field_' . $fieldname}) ? 1 : 0;
+
+        $existing = $DB->get_record('confsubmissions_field', [
+            'confsubmissions' => $confsubmissionsid,
+            'fieldname'       => $fieldname,
+        ]);
+
+        if ($existing) {
+            $existing->enabled   = $enabled;
+            $existing->sortorder = $sortorder;
+            $DB->update_record('confsubmissions_field', $existing);
+        } else {
+            $DB->insert_record('confsubmissions_field', (object) [
+                'confsubmissions' => $confsubmissionsid,
+                'fieldname'       => $fieldname,
+                'enabled'         => $enabled,
+                'sortorder'       => $sortorder,
+            ]);
+        }
+
+        $sortorder++;
+    }
+}
+
+/**
  * Adds a new instance of the confsubmissions activity.
  *
  * @param stdClass $data Data from the settings form
@@ -64,7 +113,11 @@ function confsubmissions_add_instance(stdClass $data, ?mod_confsubmissions_mod_f
         $data->introformat = FORMAT_HTML;
     }
 
-    return $DB->insert_record('confsubmissions', $data);
+    $id = $DB->insert_record('confsubmissions', $data);
+
+    confsubmissions_sync_optional_fields($id, $data);
+
+    return $id;
 }
 
 /**
@@ -80,7 +133,11 @@ function confsubmissions_update_instance(stdClass $data, ?mod_confsubmissions_mo
     $data->timemodified = time();
     $data->id = $data->instance;
 
-    return $DB->update_record('confsubmissions', $data);
+    $result = $DB->update_record('confsubmissions', $data);
+
+    confsubmissions_sync_optional_fields($data->id, $data);
+
+    return $result;
 }
 
 /**
@@ -121,9 +178,9 @@ function confsubmissions_delete_instance($id) {
 /**
  * Adds navigation nodes for this activity to the course navigation tree.
  *
- * Stub for now; a "My submissions" / "All submissions" split is rendered
- * directly in view.php. Add extra navigation nodes here in a follow-up
- * (e.g. a direct link to track management for users with manageform).
+ * A "My submissions" / "All submissions" split is rendered directly in
+ * view.php. The only extra node added here is a link to track management,
+ * for users who hold mod/confsubmissions:managetracks.
  *
  * @param navigation_node $navigation The navigation node to extend
  * @param stdClass $course The course object
@@ -131,5 +188,15 @@ function confsubmissions_delete_instance($id) {
  * @param cm_info $cm The course-module object
  */
 function confsubmissions_extend_navigation(navigation_node $navigation, stdClass $course, stdClass $module, cm_info $cm) {
-    // TODO: add navigation nodes (e.g. track management) once those screens exist.
+    $context = context_module::instance($cm->id);
+
+    if (has_capability('mod/confsubmissions:managetracks', $context)) {
+        $navigation->add(
+            get_string('managetracks', 'mod_confsubmissions'),
+            new moodle_url('/mod/confsubmissions/tracks.php', ['id' => $cm->id]),
+            navigation_node::TYPE_SETTING,
+            null,
+            'confsubmissionstracks'
+        );
+    }
 }

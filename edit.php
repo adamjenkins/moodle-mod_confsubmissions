@@ -1,0 +1,174 @@
+<?php
+// This file is part of Moodle - http://moodle.org/
+//
+// Moodle is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// Moodle is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
+
+/**
+ * Create or edit a submission for mod_confsubmissions.
+ *
+ * With no "submissionid" param, this creates a new submission (requires
+ * mod/confsubmissions:submit). With a "submissionid" param, this edits an
+ * existing submission, but only for its owner (the original submitter);
+ * editing is only allowed while the call is open.
+ *
+ * @package    mod_confsubmissions
+ * @copyright  2026 Adam Jenkins <adam@wisecat.net>
+ * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ */
+
+require_once('../../config.php');
+require_once($CFG->dirroot . '/mod/confsubmissions/lib.php');
+
+use mod_confsubmissions\api;
+use mod_confsubmissions\form\submission_form;
+use mod_confsubmissions\local\limits;
+
+$id = required_param('id', PARAM_INT);
+$submissionid = optional_param('submissionid', 0, PARAM_INT);
+
+[$course, $cm] = get_course_and_cm_from_cmid($id, 'confsubmissions');
+$confsubmissions = $DB->get_record('confsubmissions', ['id' => $cm->instance], '*', MUST_EXIST);
+
+require_login($course, true, $cm);
+
+$context = context_module::instance($cm->id);
+
+$submission = null;
+$speakers = [];
+
+if ($submissionid) {
+    $submission = api::get_submission($submissionid);
+    if (!$submission || $submission->confsubmissions != $confsubmissions->id) {
+        throw new \moodle_exception('invalidrecord', 'error', '', 'confsubmissions_submission');
+    }
+    if ((int) $submission->userid !== (int) $USER->id) {
+        throw new \moodle_exception('error:notowner', 'mod_confsubmissions');
+    }
+    // Ownership alone isn't enough: if the submit capability has since been revoked
+    // (e.g. role change), the owner should no longer be able to edit either.
+    require_capability('mod/confsubmissions:submit', $context);
+    $speakers = api::get_speakers($submission->id);
+} else {
+    require_capability('mod/confsubmissions:submit', $context);
+}
+
+$callisopen = ($confsubmissions->timeopen == 0 || time() >= $confsubmissions->timeopen)
+    && ($confsubmissions->timeclose == 0 || time() < $confsubmissions->timeclose);
+
+$pageurl = new moodle_url('/mod/confsubmissions/edit.php', ['id' => $cm->id]);
+if ($submissionid) {
+    $pageurl->param('submissionid', $submissionid);
+}
+$viewurl = new moodle_url('/mod/confsubmissions/view.php', ['id' => $cm->id]);
+
+$PAGE->set_url($pageurl);
+$PAGE->set_title(format_string($confsubmissions->name));
+$PAGE->set_heading(format_string($course->fullname));
+$PAGE->set_context($context);
+
+echo $OUTPUT->header();
+echo $OUTPUT->heading(format_string($confsubmissions->name), 2);
+echo $OUTPUT->heading(
+    $submission ? get_string('editsubmission', 'mod_confsubmissions') : get_string('newsubmission', 'mod_confsubmissions'),
+    3
+);
+
+if (!$callisopen) {
+    echo $OUTPUT->notification(get_string('callnotopen', 'mod_confsubmissions'), 'info');
+    echo $OUTPUT->footer();
+    exit;
+}
+
+$mform = new submission_form($pageurl, [
+    'cmid'            => $cm->id,
+    'confsubmissions' => $confsubmissions,
+    'speakers'        => $speakers,
+]);
+
+if ($submission) {
+    $enabledfields = api::get_enabled_fieldnames($confsubmissions->id);
+    $fieldvalues = api::get_optional_field_values($submission->id);
+
+    $formdata = clone $submission;
+    $formdata->trackid = $submission->trackid ?? 0;
+
+    foreach ($enabledfields as $fieldname) {
+        $formdata->{'field_' . $fieldname} = $fieldvalues[$fieldname] ?? '';
+    }
+
+    $speakerdata = ['speakeruserid' => [], 'speakername' => [], 'speakeremail' => [], 'speakermanual' => []];
+    foreach (array_values($speakers) as $index => $speaker) {
+        $speakerdata['speakeruserid'][$index] = $speaker->userid ?? 0;
+        $speakerdata['speakername'][$index] = $speaker->name ?? '';
+        $speakerdata['speakeremail'][$index] = $speaker->email ?? '';
+        $speakerdata['speakermanual'][$index] = empty($speaker->userid) ? 1 : 0;
+    }
+    foreach ($speakerdata as $key => $value) {
+        $formdata->$key = $value;
+    }
+
+    $mform->set_data($formdata);
+}
+
+if ($mform->is_cancelled()) {
+    redirect($viewurl);
+} else if ($data = $mform->get_data()) {
+    $now = time();
+
+    $record = (object) [
+        'confsubmissions' => $confsubmissions->id,
+        'userid'          => $submission ? $submission->userid : $USER->id,
+        'title'           => $data->title,
+        'abstract'        => $data->abstract,
+        'trackid'         => !empty($data->trackid) ? $data->trackid : null,
+        'status'          => $submission->status ?? 'submitted',
+        'timemodified'    => $now,
+    ];
+
+    if ($submission) {
+        $record->id = $submission->id;
+        $DB->update_record('confsubmissions_submission', $record);
+        $newsubmissionid = $submission->id;
+    } else {
+        $record->timecreated = $now;
+        $newsubmissionid = $DB->insert_record('confsubmissions_submission', $record);
+    }
+
+    api::sync_speakers($newsubmissionid, submission_form::extract_speakers($data));
+
+    $enabledfields = api::get_enabled_fieldnames($confsubmissions->id);
+    api::sync_optional_fields($newsubmissionid, submission_form::extract_optional_fields($data, $enabledfields));
+
+    redirect($viewurl, get_string('submissionsaved', 'mod_confsubmissions'), null, \core\output\notification::NOTIFY_SUCCESS);
+}
+
+// Formslib auto-generates an id="id_<name>" attribute for every element, so
+// 'id_title' and 'id_abstract' are the title/abstract fields' DOM ids.
+$countedfields = [
+    'title'    => ['limit' => $confsubmissions->titlelimit, 'type' => $confsubmissions->titlelimittype],
+    'abstract' => ['limit' => $confsubmissions->abstractlimit, 'type' => $confsubmissions->abstractlimittype],
+];
+foreach ($countedfields as $fieldname => $conf) {
+    if ((int) $conf['limit'] > 0) {
+        $PAGE->requires->js_call_amd('mod_confsubmissions/limitcounter', 'init', [
+            'id_' . $fieldname,
+            (int) $conf['limit'],
+            $conf['type'],
+        ]);
+    }
+}
+
+$mform->display();
+
+echo $OUTPUT->footer();

@@ -15,7 +15,7 @@
 // along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
 /**
- * Plugin version metadata for mod_confsubmissions.
+ * External functions and service definitions for mod_confsubmissions.
  *
  * @package    mod_confsubmissions
  * @copyright  2026 Adam Jenkins <adam@wisecat.net>
@@ -24,8 +24,13 @@
 
 defined('MOODLE_INTERNAL') || die();
 
-$plugin->component = 'mod_confsubmissions';
-$plugin->version   = 2026070203; // The current module version (Date: YYYYMMDDXX).
-$plugin->requires  = 2026042000; // Moodle 5.2.
-$plugin->maturity  = MATURITY_ALPHA;
-$plugin->release   = '0.1.0';
+$functions = [
+    'mod_confsubmissions_search_course_users' => [
+        'classname'   => 'mod_confsubmissions\external\search_course_users',
+        'description' => 'Searches users enrolled in the course of a confsubmissions instance, '
+            . 'for the speaker-picker autocomplete on the submission form.',
+        'type'        => 'read',
+        'ajax'        => true,
+        'capabilities' => 'mod/confsubmissions:submit',
+    ],
+];

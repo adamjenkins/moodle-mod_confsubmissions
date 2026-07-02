@@ -41,7 +41,7 @@ $capabilities = [
     ],
 
     'mod/confsubmissions:submit' => [
-        'riskbitmask'  => RISK_SPAM,
+        'riskbitmask'  => RISK_SPAM | RISK_PERSONAL,
         'captype'      => 'write',
         'contextlevel' => CONTEXT_MODULE,
         'archetypes'   => [

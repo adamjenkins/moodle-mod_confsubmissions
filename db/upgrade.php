@@ -53,5 +53,13 @@ function xmldb_confsubmissions_upgrade($oldversion) {
         upgrade_mod_savepoint(true, 2026070201, 'confsubmissions');
     }
 
+    if ($oldversion < 2026070202) {
+        // No schema change here: this savepoint exists purely to make sure the upgrade
+        // pipeline runs, which is what registers the new mod_confsubmissions_search_course_users
+        // external function declared in db/services.php (added alongside the submission form's
+        // speaker-picker autocomplete in this release).
+        upgrade_mod_savepoint(true, 2026070202, 'confsubmissions');
+    }
+
     return true;
 }
