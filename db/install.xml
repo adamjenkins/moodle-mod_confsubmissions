@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<XMLDB PATH="mod/confsubmissions/db" VERSION="2026070201" COMMENT="XMLDB file for Moodle mod/confsubmissions"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:noNamespaceSchemaLocation="../../../lib/xmldb/xmldb.xsd">
+  <TABLES>
+    <TABLE NAME="confsubmissions" COMMENT="Main table for Conference Submissions activity instances">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="course" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" DEFAULT="0" COMMENT="Course this activity belongs to"/>
+        <FIELD NAME="name" TYPE="char" LENGTH="255" NOTNULL="true" SEQUENCE="false" COMMENT="Activity name"/>
+        <FIELD NAME="intro" TYPE="text" NOTNULL="false" SEQUENCE="false" COMMENT="Activity description shown on course page"/>
+        <FIELD NAME="introformat" TYPE="int" LENGTH="4" NOTNULL="true" SEQUENCE="false" DEFAULT="0" COMMENT="Format of the intro field"/>
+        <FIELD NAME="timeopen" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" DEFAULT="0" COMMENT="Timestamp submissions open; 0 means no restriction"/>
+        <FIELD NAME="timeclose" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" DEFAULT="0" COMMENT="Timestamp submissions close; 0 means no restriction"/>
+        <FIELD NAME="titlelimit" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" DEFAULT="0" COMMENT="Maximum title length; 0 means unlimited"/>
+        <FIELD NAME="titlelimittype" TYPE="char" LENGTH="10" NOTNULL="true" SEQUENCE="false" DEFAULT="chars" COMMENT="chars or words"/>
+        <FIELD NAME="abstractlimit" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" DEFAULT="0" COMMENT="Maximum abstract length; 0 means unlimited"/>
+        <FIELD NAME="abstractlimittype" TYPE="char" LENGTH="10" NOTNULL="true" SEQUENCE="false" DEFAULT="chars" COMMENT="chars or words"/>
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" DEFAULT="0"/>
+        <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" DEFAULT="0"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="course" TYPE="foreign" FIELDS="course" REFTABLE="course" REFFIELDS="id"/>
+      </KEYS>
+    </TABLE>
+    <TABLE NAME="confsubmissions_track" COMMENT="Submission tracks used to categorise submissions for review and scheduling">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="confsubmissions" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" DEFAULT="0" COMMENT="Foreign key to confsubmissions table"/>
+        <FIELD NAME="name" TYPE="char" LENGTH="255" NOTNULL="true" SEQUENCE="false" COMMENT="Track name"/>
+        <FIELD NAME="sortorder" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" DEFAULT="0"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="confsubmissions" TYPE="foreign" FIELDS="confsubmissions" REFTABLE="confsubmissions" REFFIELDS="id"/>
+      </KEYS>
+    </TABLE>
+    <TABLE NAME="confsubmissions_field" COMMENT="Per-instance optional-field configuration (e.g. language, teaching context, sub-topic)">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="confsubmissions" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" DEFAULT="0" COMMENT="Foreign key to confsubmissions table"/>
+        <FIELD NAME="fieldname" TYPE="char" LENGTH="100" NOTNULL="true" SEQUENCE="false" COMMENT="Machine name of the optional field, e.g. language, teachingcontext, subtopic"/>
+        <FIELD NAME="enabled" TYPE="int" LENGTH="1" NOTNULL="true" SEQUENCE="false" DEFAULT="0"/>
+        <FIELD NAME="sortorder" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" DEFAULT="0"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="confsubmissions" TYPE="foreign" FIELDS="confsubmissions" REFTABLE="confsubmissions" REFFIELDS="id"/>
+        <KEY NAME="confsubmissions-fieldname" TYPE="unique" FIELDS="confsubmissions, fieldname"/>
+      </KEYS>
+    </TABLE>
+    <TABLE NAME="confsubmissions_submission" COMMENT="Presenter submissions (title, abstract, track) for a call for abstracts">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="confsubmissions" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" DEFAULT="0" COMMENT="Foreign key to confsubmissions table"/>
+        <FIELD NAME="userid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" DEFAULT="0" COMMENT="The user who submitted this abstract"/>
+        <FIELD NAME="title" TYPE="char" LENGTH="255" NOTNULL="true" SEQUENCE="false" COMMENT="Submission title"/>
+        <FIELD NAME="abstract" TYPE="text" NOTNULL="false" SEQUENCE="false" COMMENT="Submission abstract text"/>
+        <FIELD NAME="trackid" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false" COMMENT="Foreign key to confsubmissions_track table; null if unassigned"/>
+        <FIELD NAME="status" TYPE="char" LENGTH="20" NOTNULL="true" SEQUENCE="false" DEFAULT="submitted" COMMENT="Workflow status, e.g. submitted, accepted, rejected"/>
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" DEFAULT="0"/>
+        <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" DEFAULT="0"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="confsubmissions" TYPE="foreign" FIELDS="confsubmissions" REFTABLE="confsubmissions" REFFIELDS="id"/>
+        <KEY NAME="userid" TYPE="foreign" FIELDS="userid" REFTABLE="user" REFFIELDS="id"/>
+        <KEY NAME="trackid" TYPE="foreign" FIELDS="trackid" REFTABLE="confsubmissions_track" REFFIELDS="id"/>
+      </KEYS>
+    </TABLE>
+    <TABLE NAME="confsubmissions_speaker" COMMENT="Speakers (primary presenter and co-presenters) attached to a submission">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="submissionid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" DEFAULT="0" COMMENT="Foreign key to confsubmissions_submission table"/>
+        <FIELD NAME="userid" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false" COMMENT="Set when the speaker is an enrolled Moodle user"/>
+        <FIELD NAME="name" TYPE="char" LENGTH="255" NOTNULL="false" SEQUENCE="false" COMMENT="Set when the speaker was entered manually by name"/>
+        <FIELD NAME="email" TYPE="char" LENGTH="255" NOTNULL="false" SEQUENCE="false" COMMENT="Set when the speaker was entered manually by email"/>
+        <FIELD NAME="role" TYPE="char" LENGTH="20" NOTNULL="true" SEQUENCE="false" DEFAULT="primary" COMMENT="primary or co-presenter"/>
+        <FIELD NAME="sortorder" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" DEFAULT="0"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="submissionid" TYPE="foreign" FIELDS="submissionid" REFTABLE="confsubmissions_submission" REFFIELDS="id"/>
+        <KEY NAME="userid" TYPE="foreign" FIELDS="userid" REFTABLE="user" REFFIELDS="id"/>
+      </KEYS>
+    </TABLE>
+    <TABLE NAME="confsubmissions_fieldval" COMMENT="Submitter answers to per-instance enabled optional fields">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="submissionid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" DEFAULT="0" COMMENT="Foreign key to confsubmissions_submission table"/>
+        <FIELD NAME="fieldname" TYPE="char" LENGTH="100" NOTNULL="true" SEQUENCE="false" COMMENT="Machine name of the optional field this value answers"/>
+        <FIELD NAME="value" TYPE="text" NOTNULL="false" SEQUENCE="false" COMMENT="The submitter's answer"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="submissionid" TYPE="foreign" FIELDS="submissionid" REFTABLE="confsubmissions_submission" REFFIELDS="id"/>
+        <KEY NAME="submissionid-fieldname" TYPE="unique" FIELDS="submissionid, fieldname"/>
+      </KEYS>
+    </TABLE>
+  </TABLES>
+</XMLDB>
