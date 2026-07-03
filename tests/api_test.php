@@ -92,6 +92,50 @@ final class api_test extends advanced_testcase {
     }
 
     /**
+     * add_track()/update_track() persist a valid colour/icon, expose them via
+     * get_tracks(), and reject an invalid colour or an icon outside the curated
+     * allow-list (Revision round 1, 2026-07-03).
+     */
+    public function test_track_colour_and_icon(): void {
+        $this->resetAfterTest();
+        global $DB;
+
+        $confsubmissions = $this->create_instance();
+        $cm = get_coursemodule_from_instance('confsubmissions', $confsubmissions->id);
+
+        $trackid = api::add_track($confsubmissions->id, 'Coloured track', '#3366cc', 'book');
+        $track = $DB->get_record('confsubmissions_track', ['id' => $trackid]);
+        $this->assertSame('#3366cc', $track->colour);
+        $this->assertSame('book', $track->icon);
+
+        $fetched = api::get_tracks((int) $cm->id);
+        $this->assertSame('#3366cc', $fetched[$trackid]->colour);
+        $this->assertSame('book', $fetched[$trackid]->icon);
+
+        api::update_track($trackid, 'Coloured track', '#ff0000', 'rocket');
+        $track = $DB->get_record('confsubmissions_track', ['id' => $trackid]);
+        $this->assertSame('#ff0000', $track->colour);
+        $this->assertSame('rocket', $track->icon);
+
+        $this->expectException(\invalid_parameter_exception::class);
+        api::add_track($confsubmissions->id, 'Bad colour', 'not-a-colour', null);
+    }
+
+    /**
+     * An icon key outside the curated allow-list is rejected, since tracks are
+     * deliberately themed only with built-in icons, never free text or an uploaded
+     * asset (XSS/file-safety risk).
+     */
+    public function test_track_icon_must_be_in_allowlist(): void {
+        $this->resetAfterTest();
+
+        $confsubmissions = $this->create_instance();
+
+        $this->expectException(\invalid_parameter_exception::class);
+        api::add_track($confsubmissions->id, 'Bad icon', null, 'javascript:alert(1)');
+    }
+
+    /**
      * sync_speakers() replaces existing speaker rows, assigns role 'primary' to the
      * first row and 'co-presenter' to the rest, and correctly stores manually-entered
      * co-presenters (name/email, no userid) alongside enrolled-user speakers.

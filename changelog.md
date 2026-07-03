@@ -27,3 +27,37 @@
   `mod/confsubmissions:submit` when editing an existing submission (not just
   ownership), and scope/align the read-only detail view's track lookup and
   open-window check with the edit form's.
+- Revision round 1 (user feedback, 2026-07-03):
+  - **Track colour + icon**: new nullable `confsubmissions_track.colour`
+    (hex, matching `mod_confscheduler`'s room-colour convention) and `.icon`
+    (a curated Font Awesome key from a fixed allow-list — never free text or
+    an uploaded asset, an XSS/file-safety risk) columns. `tracks.php` gained
+    full edit support (previously add/delete only) and a colour swatch +
+    icon column in the track list. `classes/api.php::get_tracks()`'s return
+    shape now includes both fields, a cross-plugin contract `mod_confprogram`
+    and `mod_confscheduler` both already consume.
+  - **Speaker-form bug fixes**, each with a genuine root-cause fix, not a
+    surface patch:
+    - The Speakers section rendered empty on a new submission because
+      formslib collapses every repeated header past the first two by
+      default — fixed with an explicit `setExpanded()` per row.
+    - The primary speaker's autocomplete showed a raw userid instead of a
+      resolved name because that element only renders a name for a
+      pre-selected value when a matching choice exists in its options array
+      — fixed by seeding it with the current user's (and, when editing,
+      every existing speaker's) resolved name.
+    - A co-presenter's "manual entry" mode was forgotten on reload because
+      `repeat_elements()`'s own default for the mode checkbox was applied
+      *before*, and so always won over, `set_data()`'s attempt to restore
+      the actually-saved value — fixed by removing that erroneous default.
+    - Speaker display order is now explicitly specifiable via a "Display
+      order" selector per co-presenter row (the primary speaker is always
+      first and not reorderable); `extract_speakers()` stably sorts
+      co-presenters by the submitted position before handing them to the
+      existing, unmodified `sync_speakers()`, which already persisted
+      `sortorder` from array order.
+  - 26/26 PHPUnit passing (was 22), phpcs/moodlecheck clean. Verified live
+    as a genuine non-admin enrolled user: the Speakers section now renders
+    correctly on a new submission, a manually-entered co-presenter's mode
+    and details survive a save-then-reload round trip, and the primary
+    speaker's resolved name displays correctly throughout.

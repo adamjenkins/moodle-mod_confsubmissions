@@ -57,6 +57,56 @@ function confsubmissions_optional_fieldnames(): array {
 }
 
 /**
+ * The curated, fixed set of icon keys organisers may pick for a track
+ * (confsubmissions_track.icon). Deliberately a closed allow-list rather than free
+ * text or an uploaded asset: letting organisers upload arbitrary SVGs/images would be
+ * an XSS/file-safety risk, so tracks are themed with a small set of safe, built-in
+ * Font Awesome icons instead. Each key maps to a Font Awesome class via
+ * str_replace('_', '-', $key) (e.g. 'chart_bar' -> 'fa-chart-bar').
+ *
+ * @return string[] Icon keys
+ */
+function confsubmissions_track_icon_keys(): array {
+    return [
+        'book', 'code', 'chart_bar', 'users', 'lightbulb', 'graduation_cap', 'flask',
+        'laptop_code', 'comments', 'globe', 'shield_halved', 'rocket', 'puzzle_piece',
+        'microphone', 'camera', 'paintbrush', 'wrench', 'leaf',
+    ];
+}
+
+/**
+ * Returns the track icon picker's options, keyed by machine key, for use in a select
+ * element. Includes a '' => "None" option first.
+ *
+ * @return array<string, string> Options keyed by icon key (or '' for none)
+ */
+function confsubmissions_track_icon_options(): array {
+    $options = ['' => get_string('trackicon_none', 'mod_confsubmissions')];
+    foreach (confsubmissions_track_icon_keys() as $key) {
+        $options[$key] = get_string('trackicon_' . $key, 'mod_confsubmissions');
+    }
+    return $options;
+}
+
+/**
+ * Renders a track's icon as a Font Awesome <i> tag, or an empty string if the track
+ * has no icon (or an icon value outside the allow-list, which should never happen for
+ * data written through classes/api.php, but is defensively re-checked here too since
+ * this renders directly into HTML).
+ *
+ * @param string|null $icon The confsubmissions_track.icon value
+ * @return string HTML, or ''
+ */
+function confsubmissions_render_track_icon(?string $icon): string {
+    if (empty($icon) || !in_array($icon, confsubmissions_track_icon_keys(), true)) {
+        return '';
+    }
+
+    $faclass = 'fa-' . str_replace('_', '-', $icon);
+    return html_writer::tag('i', '', ['class' => 'icon fa ' . $faclass, 'aria-hidden' => 'true']);
+}
+
+/**
  * Upserts the confsubmissions_field rows for an instance from the mod_form.php
  * checkbox data (field_language, field_teachingcontext, field_subtopic).
  *

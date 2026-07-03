@@ -61,5 +61,26 @@ function xmldb_confsubmissions_upgrade($oldversion) {
         upgrade_mod_savepoint(true, 2026070202, 'confsubmissions');
     }
 
+    if ($oldversion < 2026070204) {
+        // Add organiser-configurable colour/icon theming to tracks: colour is a nullable
+        // hex string (same convention as mod_confscheduler's confscheduler_room.colour),
+        // icon is a nullable machine key from a fixed, curated allow-list (never free text
+        // or an uploaded asset - see confsubmissions_track_icon_options() in lib.php and
+        // the validation in classes/api.php).
+        $table = new xmldb_table('confsubmissions_track');
+
+        $field = new xmldb_field('colour', XMLDB_TYPE_CHAR, '7', null, null, null, null, 'sortorder');
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+
+        $field = new xmldb_field('icon', XMLDB_TYPE_CHAR, '30', null, null, null, null, 'colour');
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+
+        upgrade_mod_savepoint(true, 2026070204, 'confsubmissions');
+    }
+
     return true;
 }

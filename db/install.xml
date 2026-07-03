@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" ?>
-<XMLDB PATH="mod/confsubmissions/db" VERSION="2026070203" COMMENT="XMLDB file for Moodle mod/confsubmissions"
+<XMLDB PATH="mod/confsubmissions/db" VERSION="2026070204" COMMENT="XMLDB file for Moodle mod/confsubmissions"
     xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
     xsi:noNamespaceSchemaLocation="../../../lib/xmldb/xmldb.xsd">
   <TABLES>
@@ -30,6 +30,8 @@
         <FIELD NAME="confsubmissions" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" DEFAULT="0" COMMENT="Foreign key to confsubmissions table"/>
         <FIELD NAME="name" TYPE="char" LENGTH="255" NOTNULL="true" SEQUENCE="false" COMMENT="Track name"/>
         <FIELD NAME="sortorder" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" DEFAULT="0"/>
+        <FIELD NAME="colour" TYPE="char" LENGTH="7" NOTNULL="false" SEQUENCE="false" COMMENT="Hex colour (e.g. #3366cc) used to theme this track, matching mod_confscheduler's confscheduler_room.colour convention; null means no theme/default styling"/>
+        <FIELD NAME="icon" TYPE="char" LENGTH="30" NOTNULL="false" SEQUENCE="false" COMMENT="Machine key of a curated icon (see confsubmissions_track_icon_options() in lib.php), rendered as a Font Awesome class; null/empty means no icon. Not free text: values are validated against the fixed allow-list before being stored"/>
       </FIELDS>
       <KEYS>
         <KEY NAME="primary" TYPE="primary" FIELDS="id"/>

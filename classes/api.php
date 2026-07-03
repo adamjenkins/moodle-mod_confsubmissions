@@ -137,7 +137,47 @@ class api {
     }
 
     /**
+     * Validates that a colour is either null or a 6-digit hex colour (e.g. #3366cc),
+     * the same convention used by mod_confscheduler's confscheduler_room.colour.
+     *
+     * @param string|null $colour
+     * @return void
+     * @throws \invalid_parameter_exception if $colour is non-null and not a valid hex colour
+     */
+    protected static function validate_colour(?string $colour): void {
+        if ($colour === null || $colour === '') {
+            return;
+        }
+
+        if (!preg_match('/^#[0-9a-fA-F]{6}$/', $colour)) {
+            throw new \invalid_parameter_exception(get_string('error:invalidcolour', 'mod_confsubmissions'));
+        }
+    }
+
+    /**
+     * Validates that an icon is either null/empty or one of the curated icon keys
+     * (confsubmissions_track_icon_keys() in lib.php). Tracks are never themed with
+     * free-text or uploaded icons - see that function's docblock for why.
+     *
+     * @param string|null $icon
+     * @return void
+     * @throws \invalid_parameter_exception if $icon is non-empty and not an allowed key
+     */
+    protected static function validate_icon(?string $icon): void {
+        if ($icon === null || $icon === '') {
+            return;
+        }
+
+        if (!in_array($icon, confsubmissions_track_icon_keys(), true)) {
+            throw new \invalid_parameter_exception(get_string('error:invalidicon', 'mod_confsubmissions'));
+        }
+    }
+
+    /**
      * Returns the tracks configured for the confsubmissions instance identified by a cmid.
+     *
+     * Each track record includes 'colour' (a hex string or null) and 'icon' (a curated
+     * icon key or null), in addition to the usual id/confsubmissions/name/sortorder columns.
      *
      * @param int $cmid The course-module id
      * @return \stdClass[] Array of track records, keyed by id
@@ -206,10 +246,16 @@ class api {
      *
      * @param int $confsubmissionsid The confsubmissions instance id
      * @param string $name The track name
+     * @param string|null $colour A hex colour (e.g. #3366cc) to theme this track, or null for none
+     * @param string|null $icon A curated icon key (see confsubmissions_track_icon_keys() in lib.php), or null
      * @return int The id of the newly inserted track
+     * @throws \invalid_parameter_exception if $colour or $icon is set and invalid
      */
-    public static function add_track(int $confsubmissionsid, string $name): int {
+    public static function add_track(int $confsubmissionsid, string $name, ?string $colour = null, ?string $icon = null): int {
         global $DB;
+
+        self::validate_colour($colour);
+        self::validate_icon($icon);
 
         $maxsortorder = (int) $DB->get_field_sql(
             'SELECT MAX(sortorder) FROM {confsubmissions_track} WHERE confsubmissions = ?',
@@ -220,9 +266,35 @@ class api {
             'confsubmissions' => $confsubmissionsid,
             'name'            => $name,
             'sortorder'       => $maxsortorder + 1,
+            'colour'          => $colour ?: null,
+            'icon'            => $icon ?: null,
         ];
 
         return $DB->insert_record('confsubmissions_track', $record);
+    }
+
+    /**
+     * Updates a track's name, colour and icon in place (sortorder is untouched).
+     *
+     * @param int $trackid The confsubmissions_track id
+     * @param string $name The track name
+     * @param string|null $colour A hex colour (e.g. #3366cc) to theme this track, or null for none
+     * @param string|null $icon A curated icon key (see confsubmissions_track_icon_keys() in lib.php), or null
+     * @return void
+     * @throws \invalid_parameter_exception if $colour or $icon is set and invalid
+     */
+    public static function update_track(int $trackid, string $name, ?string $colour = null, ?string $icon = null): void {
+        global $DB;
+
+        self::validate_colour($colour);
+        self::validate_icon($icon);
+
+        $DB->update_record('confsubmissions_track', (object) [
+            'id'     => $trackid,
+            'name'   => $name,
+            'colour' => $colour ?: null,
+            'icon'   => $icon ?: null,
+        ]);
     }
 
     /**

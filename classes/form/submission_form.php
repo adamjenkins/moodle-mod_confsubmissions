@@ -99,13 +99,34 @@ class submission_form extends \moodleform {
             'data-cmid'   => $cmid,
         ];
 
+        // The autocomplete element only shows a real name for a pre-selected value if
+        // that value has a matching choice in its options array; with an empty array it
+        // falls back to rendering the raw stored value (e.g. a bare userid like "5")
+        // instead of a name. Seed it with every userid this row-set could pre-select:
+        // the current user (the row 0 default on a new submission) and every existing
+        // speaker's userid (when editing).
+        $useroptions = [(int) $USER->id => fullname($USER)];
+        foreach ($speakers as $speaker) {
+            if (!empty($speaker->userid) && !isset($useroptions[(int) $speaker->userid])) {
+                $speakeruser = \core_user::get_user($speaker->userid);
+                if ($speakeruser) {
+                    $useroptions[(int) $speaker->userid] = fullname($speakeruser);
+                }
+            }
+        }
+
+        $positionoptions = [];
+        for ($n = 1; $n <= self::MAX_SPEAKERS; $n++) {
+            $positionoptions[$n] = $n;
+        }
+
         $repeatarray = [
             $mform->createElement('header', 'speakerno', get_string('speakerno', 'mod_confsubmissions', '{no}')),
             $mform->createElement(
                 'autocomplete',
                 'speakeruserid',
                 get_string('selectuser', 'mod_confsubmissions'),
-                [],
+                $useroptions,
                 $autocompleteoptions
             ),
             $mform->createElement(
@@ -117,6 +138,12 @@ class submission_form extends \moodleform {
             $mform->createElement('text', 'speakername', get_string('speakername', 'mod_confsubmissions')),
             $mform->createElement('text', 'speakeremail', get_string('speakeremail', 'mod_confsubmissions')),
             $mform->createElement(
+                'select',
+                'speakerposition',
+                get_string('speakerposition', 'mod_confsubmissions'),
+                $positionoptions
+            ),
+            $mform->createElement(
                 'submit',
                 'speakerdelete',
                 get_string('removespeaker', 'mod_confsubmissions', '{no}'),
@@ -126,10 +153,20 @@ class submission_form extends \moodleform {
         ];
 
         $repeatoptions = [
-            'speakeruserid' => ['type' => PARAM_INT],
-            'speakermanual' => ['type' => PARAM_BOOL, 'default' => 0],
-            'speakername'   => ['type' => PARAM_TEXT],
-            'speakeremail'  => ['type' => PARAM_RAW_TRIMMED],
+            'speakeruserid'   => ['type' => PARAM_INT],
+            // No 'default' key here: repeat_elements() applies a 'default' via
+            // setDefault('speakermanual[N]', ...), which HTML_QuickForm_element::_findValue()
+            // looks up *before* the nested array set_data() later supplies (it checks the
+            // literal 'speakermanual[N]' key first, only falling back to the nested
+            // 'speakermanual' => [N => ...] array if that literal key was never set). With a
+            // 'default' set here, that stale repeat-time default always wins over whatever
+            // set_data() tries to restore, so every row's checkbox forgets a saved manual
+            // entry and resets to search mode on every reload. Omitting it lets set_data()'s
+            // value (edit.php) or PHP/HTML's natural "unchecked" (new submission) apply.
+            'speakermanual'   => ['type' => PARAM_BOOL],
+            'speakername'     => ['type' => PARAM_TEXT],
+            'speakeremail'    => ['type' => PARAM_RAW_TRIMMED],
+            'speakerposition' => ['type' => PARAM_INT],
         ];
 
         $nextel = $this->repeat_elements(
@@ -144,13 +181,21 @@ class submission_form extends \moodleform {
             'speakerdelete'
         );
 
-        // Row 0 is the primary presenter and cannot be removed.
+        // Row 0 is the primary presenter: it cannot be removed or reordered.
         $mform->removeElement('speakerdelete[0]');
+        $mform->removeElement('speakerposition[0]');
 
         for ($i = 0; $i < $nextel; $i++) {
             $mform->hideIf('speakername[' . $i . ']', 'speakermanual[' . $i . ']', 'notchecked');
             $mform->hideIf('speakeremail[' . $i . ']', 'speakermanual[' . $i . ']', 'notchecked');
             $mform->hideIf('speakeruserid[' . $i . ']', 'speakermanual[' . $i . ']', 'checked');
+
+            // Each repeated "Speaker N" header is its own collapsible section. formslib
+            // collapses every header past the first two by default (see formslib.php's
+            // accept_set_nonvisible_elements()), which otherwise leaves every speaker row's
+            // actual fields (the autocomplete/checkbox/name/email inputs) hidden behind a
+            // collapsed toggle with nothing visibly rendered beneath the "Speakers" heading.
+            $mform->setExpanded('speakerno[' . $i . ']', true);
         }
 
         if (empty($speakers)) {
@@ -243,11 +288,19 @@ class submission_form extends \moodleform {
      * Extracts the submitted speaker rows into the ordered, plain-array format
      * expected by \mod_confsubmissions\api::sync_speakers().
      *
+     * The first surviving row is always kept first (it becomes the 'primary' speaker
+     * in sync_speakers()); every subsequent surviving row is a co-presenter, and those
+     * are ordered by their submitted 'speakerposition' value (ties, or a missing value,
+     * fall back to the order they were submitted in, so this is a stable sort) - this is
+     * what lets a submitter explicitly control co-presenter display order via the
+     * "Display order" selector, rather than it always following row/insertion order.
+     *
      * @param \stdClass $data The validated form data (as returned by get_data())
      * @return array Ordered list of speaker rows
      */
     public static function extract_speakers(\stdClass $data): array {
-        $speakers = [];
+        $primary = null;
+        $cospeakers = [];
         $repeatcount = (int) ($data->speakerrepeats ?? 0);
 
         for ($i = 0; $i < $repeatcount; $i++) {
@@ -258,13 +311,36 @@ class submission_form extends \moodleform {
             $ismanual = !empty($data->speakermanual[$i]);
 
             if ($ismanual) {
-                $speakers[] = [
+                $speaker = [
                     'name'  => trim((string) ($data->speakername[$i] ?? '')),
                     'email' => trim((string) ($data->speakeremail[$i] ?? '')) ?: null,
                 ];
             } else if (!empty($data->speakeruserid[$i])) {
-                $speakers[] = ['userid' => (int) $data->speakeruserid[$i]];
+                $speaker = ['userid' => (int) $data->speakeruserid[$i]];
+            } else {
+                continue;
             }
+
+            if ($primary === null) {
+                $primary = $speaker;
+                continue;
+            }
+
+            $order = count($cospeakers);
+            $position = isset($data->speakerposition[$i]) ? (int) $data->speakerposition[$i] : ($order + 2);
+            $cospeakers[] = ['position' => $position, 'order' => $order, 'speaker' => $speaker];
+        }
+
+        usort($cospeakers, function ($a, $b) {
+            return $a['position'] <=> $b['position'] ?: $a['order'] <=> $b['order'];
+        });
+
+        $speakers = [];
+        if ($primary !== null) {
+            $speakers[] = $primary;
+        }
+        foreach ($cospeakers as $row) {
+            $speakers[] = $row['speaker'];
         }
 
         return $speakers;

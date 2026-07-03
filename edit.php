@@ -107,12 +107,21 @@ if ($submission) {
         $formdata->{'field_' . $fieldname} = $fieldvalues[$fieldname] ?? '';
     }
 
-    $speakerdata = ['speakeruserid' => [], 'speakername' => [], 'speakeremail' => [], 'speakermanual' => []];
+    $speakerdata = [
+        'speakeruserid'   => [],
+        'speakername'     => [],
+        'speakeremail'    => [],
+        'speakermanual'   => [],
+        'speakerposition' => [],
+    ];
     foreach (array_values($speakers) as $index => $speaker) {
         $speakerdata['speakeruserid'][$index] = $speaker->userid ?? 0;
         $speakerdata['speakername'][$index] = $speaker->name ?? '';
         $speakerdata['speakeremail'][$index] = $speaker->email ?? '';
         $speakerdata['speakermanual'][$index] = empty($speaker->userid) ? 1 : 0;
+        // Row 0 (primary) has no position selector; existing sortorder (already the
+        // stored display order) maps directly onto the 1-based position options.
+        $speakerdata['speakerposition'][$index] = $index + 1;
     }
     foreach ($speakerdata as $key => $value) {
         $formdata->$key = $value;

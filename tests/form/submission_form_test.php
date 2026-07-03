@@ -269,6 +269,57 @@ final class submission_form_test extends advanced_testcase {
     }
 
     /**
+     * extract_speakers() orders co-presenters by their submitted 'speakerposition'
+     * value, not by row/insertion order, and always keeps the first surviving row as
+     * the primary speaker regardless of its position value (Revision round 1,
+     * 2026-07-03 -- the "speaker display order should be specifiable" fix).
+     */
+    public function test_extract_speakers_respects_submitted_position(): void {
+        $this->resetAfterTest();
+
+        $data = (object) [
+            'speakerrepeats'   => 3,
+            'speakermanual'    => [0 => 0, 1 => 1, 2 => 1],
+            'speakeruserid'    => [0 => 42],
+            'speakername'      => [1 => 'Second co-presenter', 2 => 'First co-presenter'],
+            'speakeremail'     => [1 => 'second@example.com', 2 => 'first@example.com'],
+            // Row 1 (submitted second) should display AFTER row 2 (submitted third),
+            // because its position value is higher -- the opposite of insertion order.
+            'speakerposition'  => [1 => 3, 2 => 2],
+        ];
+
+        $speakers = submission_form::extract_speakers($data);
+
+        $this->assertSame([
+            ['userid' => 42],
+            ['name' => 'First co-presenter', 'email' => 'first@example.com'],
+            ['name' => 'Second co-presenter', 'email' => 'second@example.com'],
+        ], $speakers);
+    }
+
+    /**
+     * A tied or missing 'speakerposition' value falls back to submission order, so
+     * extract_speakers() never produces an unstable/arbitrary ordering.
+     */
+    public function test_extract_speakers_position_tie_falls_back_to_submission_order(): void {
+        $this->resetAfterTest();
+
+        $data = (object) [
+            'speakerrepeats'  => 3,
+            'speakermanual'   => [0 => 0, 1 => 1, 2 => 1],
+            'speakeruserid'   => [0 => 42],
+            'speakername'     => [1 => 'Submitted first', 2 => 'Submitted second'],
+            'speakeremail'    => [1 => '', 2 => ''],
+            'speakerposition' => [1 => 2, 2 => 2],
+        ];
+
+        $speakers = submission_form::extract_speakers($data);
+
+        $this->assertSame('Submitted first', $speakers[1]['name']);
+        $this->assertSame('Submitted second', $speakers[2]['name']);
+    }
+
+    /**
      * extract_optional_fields() only extracts values for the enabled fieldnames given.
      */
     public function test_extract_optional_fields(): void {

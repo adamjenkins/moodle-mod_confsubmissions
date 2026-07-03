@@ -14,9 +14,9 @@ Part of the [Conference Tools](https://github.com/adamjenkins/moodle-conference-
 Add a "Conference Submissions" activity to a course to open a call for abstracts. Presenters submit a title, abstract and speaker information; organisers configure per-instance limits, optional fields, and submission tracks used later for review and scheduling.
 
 - Configurable title/abstract character and word limits.
-- Speaker field defaults to the logged-in user; co-presenters can be added by searching for a user enrolled in the course, or by typing a name/email manually.
+- Speaker field defaults to the logged-in user; co-presenters can be added by searching for a user enrolled in the course, or by typing a name/email manually, in an organiser-visible, explicitly re-orderable display order.
 - Optional fields (presentation language, teaching context, sub-topic area) can be toggled on per instance.
-- Tracks for categorising submissions, used by downstream plugins for review assignment and scheduling.
+- Tracks for categorising submissions, each with an optional colour and icon (drawn from a curated, built-in set — never free text or an uploaded asset), used by downstream plugins for review assignment, scheduling, and coloured pill badges shown across the whole suite.
 - A stable PHP API (`classes/api.php`) other conference-tools plugins build on.
 
 ## Requirements
