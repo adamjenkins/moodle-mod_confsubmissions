@@ -45,15 +45,50 @@ function confsubmissions_supports($feature) {
 }
 
 /**
- * The machine names of the fixed optional fields that mod_form.php exposes as
- * toggles (confsubmissions_field.fieldname). These are not free-form custom
- * fields; the set is closed and shared by mod_form.php, submission_form.php,
- * and confsubmissions_field_optional_fields_from_form_data() below.
+ * The field types an organiser may choose for a dynamic optional field
+ * (confsubmissions_field.type), in the order offered on fields.php. Revision round 1
+ * follow-up (2026-07-04): replaces the previous fixed, closed set of three checkboxes
+ * with organiser-named, organiser-typed fields -- inspired by (a deliberately smaller
+ * subset of) mod_data's field type system, scoped to what a submission form realistically
+ * needs rather than that module's full picture/file/latlong range.
  *
  * @return string[]
  */
-function confsubmissions_optional_fieldnames(): array {
-    return ['language', 'teachingcontext', 'subtopic'];
+function confsubmissions_field_types(): array {
+    return ['text', 'textarea', 'menu', 'checkbox', 'date', 'number', 'url'];
+}
+
+/**
+ * Returns the field type picker's options, keyed by machine key, for use in a select
+ * element.
+ *
+ * @return array<string, string> Options keyed by type key
+ */
+function confsubmissions_field_type_options(): array {
+    $options = [];
+    foreach (confsubmissions_field_types() as $type) {
+        $options[$type] = get_string('fieldtype_' . $type, 'mod_confsubmissions');
+    }
+    return $options;
+}
+
+/**
+ * Splits a confsubmissions_field.options value (newline-separated) into a clean array
+ * of non-empty choice strings, for a 'menu'-type field. Used both when rendering the
+ * select element on the submission form and when validating fields.php's own form.
+ *
+ * @param string|null $options Raw newline-separated options text
+ * @return string[] Non-empty, trimmed choices, in the order given
+ */
+function confsubmissions_parse_field_options(?string $options): array {
+    if ($options === null || trim($options) === '') {
+        return [];
+    }
+
+    $lines = preg_split('/\r\n|\r|\n/', $options);
+    $lines = array_map('trim', $lines);
+
+    return array_values(array_filter($lines, fn($line) => $line !== ''));
 }
 
 /**
@@ -107,43 +142,6 @@ function confsubmissions_render_track_icon(?string $icon): string {
 }
 
 /**
- * Upserts the confsubmissions_field rows for an instance from the mod_form.php
- * checkbox data (field_language, field_teachingcontext, field_subtopic).
- *
- * @param int $confsubmissionsid The confsubmissions instance id
- * @param stdClass $data Data from the settings form
- * @return void
- */
-function confsubmissions_sync_optional_fields(int $confsubmissionsid, stdClass $data): void {
-    global $DB;
-
-    $sortorder = 0;
-    foreach (confsubmissions_optional_fieldnames() as $fieldname) {
-        $enabled = !empty($data->{'field_' . $fieldname}) ? 1 : 0;
-
-        $existing = $DB->get_record('confsubmissions_field', [
-            'confsubmissions' => $confsubmissionsid,
-            'fieldname'       => $fieldname,
-        ]);
-
-        if ($existing) {
-            $existing->enabled   = $enabled;
-            $existing->sortorder = $sortorder;
-            $DB->update_record('confsubmissions_field', $existing);
-        } else {
-            $DB->insert_record('confsubmissions_field', (object) [
-                'confsubmissions' => $confsubmissionsid,
-                'fieldname'       => $fieldname,
-                'enabled'         => $enabled,
-                'sortorder'       => $sortorder,
-            ]);
-        }
-
-        $sortorder++;
-    }
-}
-
-/**
  * Adds a new instance of the confsubmissions activity.
  *
  * @param stdClass $data Data from the settings form
@@ -163,11 +161,7 @@ function confsubmissions_add_instance(stdClass $data, ?mod_confsubmissions_mod_f
         $data->introformat = FORMAT_HTML;
     }
 
-    $id = $DB->insert_record('confsubmissions', $data);
-
-    confsubmissions_sync_optional_fields($id, $data);
-
-    return $id;
+    return $DB->insert_record('confsubmissions', $data);
 }
 
 /**
@@ -183,11 +177,7 @@ function confsubmissions_update_instance(stdClass $data, ?mod_confsubmissions_mo
     $data->timemodified = time();
     $data->id = $data->instance;
 
-    $result = $DB->update_record('confsubmissions', $data);
-
-    confsubmissions_sync_optional_fields($data->id, $data);
-
-    return $result;
+    return $DB->update_record('confsubmissions', $data);
 }
 
 /**

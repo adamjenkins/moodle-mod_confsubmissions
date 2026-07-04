@@ -113,5 +113,99 @@ function xmldb_confsubmissions_upgrade($oldversion) {
         upgrade_mod_savepoint(true, 2026070205, 'confsubmissions');
     }
 
+    if ($oldversion < 2026070206) {
+        // Replace the fixed, closed set of three optional-field checkboxes (language,
+        // teaching context, sub-topic) with fully dynamic, organiser-named fields, each
+        // with a chosen type (Revision round 1 follow-up, 2026-07-04): the organiser
+        // should be able to name each field and specify its own field type.
+        $fieldtable = new xmldb_table('confsubmissions_field');
+
+        $namefield = new xmldb_field('name', XMLDB_TYPE_CHAR, '255', null, null, null, null, 'fieldname');
+        if (!$dbman->field_exists($fieldtable, $namefield)) {
+            $dbman->add_field($fieldtable, $namefield);
+        }
+        $typefield = new xmldb_field('type', XMLDB_TYPE_CHAR, '20', null, XMLDB_NOTNULL, null, 'text', 'name');
+        if (!$dbman->field_exists($fieldtable, $typefield)) {
+            $dbman->add_field($fieldtable, $typefield);
+        }
+        $optionsfield = new xmldb_field('options', XMLDB_TYPE_TEXT, null, null, null, null, null, 'type');
+        if (!$dbman->field_exists($fieldtable, $optionsfield)) {
+            $dbman->add_field($fieldtable, $optionsfield);
+        }
+        $requiredfield = new xmldb_field('required', XMLDB_TYPE_INTEGER, '1', null, XMLDB_NOTNULL, null, '0', 'options');
+        if (!$dbman->field_exists($fieldtable, $requiredfield)) {
+            $dbman->add_field($fieldtable, $requiredfield);
+        }
+
+        // Backfill `name`/`type` from the old fixed fieldname for any row that predates
+        // this upgrade. A row that was never enabled is deleted outright rather than
+        // migrated forward: it was never shown to a presenter and carries no data.
+        if ($dbman->field_exists($fieldtable, new xmldb_field('fieldname'))) {
+            $legacylabels = [
+                'language'        => 'Presentation language',
+                'teachingcontext' => 'Teaching context',
+                'subtopic'        => 'Sub-topic area',
+            ];
+            $rows = $DB->get_records('confsubmissions_field');
+            foreach ($rows as $row) {
+                if (empty($row->enabled)) {
+                    $DB->delete_records('confsubmissions_field', ['id' => $row->id]);
+                    continue;
+                }
+                $DB->update_record('confsubmissions_field', (object) [
+                    'id'   => $row->id,
+                    'name' => $legacylabels[$row->fieldname] ?? $row->fieldname,
+                    'type' => 'text',
+                ]);
+            }
+        }
+
+        // Migrate confsubmissions_fieldval from fieldname-keyed to fieldid-keyed, since a
+        // field's machine identity is now its row id, not a fixed vocabulary string.
+        $valtable = new xmldb_table('confsubmissions_fieldval');
+        $fieldidfield = new xmldb_field('fieldid', XMLDB_TYPE_INTEGER, '10', null, null, null, null, 'submissionid');
+        if (!$dbman->field_exists($valtable, $fieldidfield)) {
+            $dbman->add_field($valtable, $fieldidfield);
+        }
+
+        if ($dbman->field_exists($valtable, new xmldb_field('fieldname'))) {
+            $DB->execute(
+                'UPDATE {confsubmissions_fieldval} fv
+                   JOIN {confsubmissions_submission} sub ON sub.id = fv.submissionid
+                   JOIN {confsubmissions_field} f
+                        ON f.confsubmissions = sub.confsubmissions AND f.fieldname = fv.fieldname
+                    SET fv.fieldid = f.id'
+            );
+
+            // A value whose field was disabled (and so deleted, above) is orphaned and
+            // meaningless without a field to attach to.
+            $DB->delete_records_select('confsubmissions_fieldval', 'fieldid IS NULL');
+
+            $oldvalkey = new xmldb_key('submissionid-fieldname', XMLDB_KEY_UNIQUE, ['submissionid', 'fieldname']);
+            if ($dbman->find_key_name($valtable, $oldvalkey)) {
+                $dbman->drop_key($valtable, $oldvalkey);
+            }
+            $dbman->drop_field($valtable, new xmldb_field('fieldname'));
+        }
+
+        $newvalkey = new xmldb_key('submissionid-fieldid', XMLDB_KEY_UNIQUE, ['submissionid', 'fieldid']);
+        if (!$dbman->find_key_name($valtable, $newvalkey)) {
+            $dbman->add_key($valtable, $newvalkey);
+        }
+
+        if ($dbman->field_exists($fieldtable, new xmldb_field('fieldname'))) {
+            $oldfieldkey = new xmldb_key('confsubmissions-fieldname', XMLDB_KEY_UNIQUE, ['confsubmissions', 'fieldname']);
+            if ($dbman->find_key_name($fieldtable, $oldfieldkey)) {
+                $dbman->drop_key($fieldtable, $oldfieldkey);
+            }
+            $dbman->drop_field($fieldtable, new xmldb_field('fieldname'));
+        }
+        if ($dbman->field_exists($fieldtable, new xmldb_field('enabled'))) {
+            $dbman->drop_field($fieldtable, new xmldb_field('enabled'));
+        }
+
+        upgrade_mod_savepoint(true, 2026070206, 'confsubmissions');
+    }
+
     return true;
 }

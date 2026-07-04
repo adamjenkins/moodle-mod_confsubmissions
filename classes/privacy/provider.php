@@ -69,8 +69,8 @@ class provider implements
         ], 'privacy:metadata:confsubmissions_speaker');
 
         $collection->add_database_table('confsubmissions_fieldval', [
-            'fieldname' => 'privacy:metadata:confsubmissions_fieldval:fieldname',
-            'value'     => 'privacy:metadata:confsubmissions_fieldval:value',
+            'fieldid' => 'privacy:metadata:confsubmissions_fieldval:fieldid',
+            'value'   => 'privacy:metadata:confsubmissions_fieldval:value',
         ], 'privacy:metadata:confsubmissions_fieldval');
 
         return $collection;
@@ -158,6 +158,15 @@ class provider implements
                 continue;
             }
 
+            // Field names, by id, for a human-readable export label -- see the loop
+            // below, which exports each field's current name rather than its raw id.
+            $fieldnamesbyid = $DB->get_records_menu(
+                'confsubmissions_field',
+                ['confsubmissions' => $confsubmissions->id],
+                '',
+                'id, name'
+            );
+
             // Submissions owned by this user: export in full, including speakers and
             // optional-field answers attached to each one.
             $ownsubmissions = $DB->get_records(
@@ -188,7 +197,7 @@ class provider implements
                         'role'  => $sp->role,
                     ], array_values($speakers)),
                     'fields' => array_map(fn($fv) => (object) [
-                        'fieldname' => $fv->fieldname,
+                        'fieldname' => $fieldnamesbyid[$fv->fieldid] ?? (string) $fv->fieldid,
                         'value'     => $fv->value,
                     ], array_values($fieldvals)),
                 ];

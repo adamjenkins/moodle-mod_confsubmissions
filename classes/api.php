@@ -195,10 +195,10 @@ class api {
     }
 
     /**
-     * Returns the submitter's answers to enabled optional fields for a submission.
+     * Returns the submitter's answers to an instance's optional fields for a submission.
      *
      * @param int $submissionid The confsubmissions_submission id
-     * @return array Field values keyed by fieldname
+     * @return array Field values keyed by fieldid
      */
     public static function get_optional_field_values(int $submissionid): array {
         global $DB;
@@ -207,12 +207,13 @@ class api {
             'confsubmissions_fieldval',
             ['submissionid' => $submissionid],
             '',
-            'fieldname, value'
+            'fieldid, value'
         );
     }
 
     /**
-     * Returns the optional-field configuration rows for an instance, keyed by id.
+     * Returns the optional-field configuration rows for an instance, keyed by id, in
+     * sort order.
      *
      * @param int $confsubmissionsid The confsubmissions instance id
      * @return \stdClass[] Field configuration rows keyed by id
@@ -228,17 +229,15 @@ class api {
     }
 
     /**
-     * Returns the machine names of the optional fields enabled for an instance, in order.
+     * Returns a single optional-field configuration row.
      *
-     * @param int $confsubmissionsid The confsubmissions instance id
-     * @return string[] Enabled fieldnames
+     * @param int $fieldid The confsubmissions_field id
+     * @return \stdClass|false The field record, or false if not found
      */
-    public static function get_enabled_fieldnames(int $confsubmissionsid): array {
-        $fields = self::get_fields($confsubmissionsid);
+    public static function get_field(int $fieldid) {
+        global $DB;
 
-        $enabled = array_filter($fields, fn($field) => (bool) $field->enabled);
-
-        return array_values(array_map(fn($field) => $field->fieldname, $enabled));
+        return $DB->get_record('confsubmissions_field', ['id' => $fieldid]);
     }
 
     /**
@@ -466,7 +465,7 @@ class api {
      * clearing an optional field's answer removes the row rather than storing '' .
      *
      * @param int $submissionid The confsubmissions_submission id
-     * @param array $values Field values keyed by fieldname
+     * @param array $values Field values keyed by fieldid
      * @return void
      */
     public static function sync_optional_fields(int $submissionid, array $values): void {
@@ -474,16 +473,132 @@ class api {
 
         $DB->delete_records('confsubmissions_fieldval', ['submissionid' => $submissionid]);
 
-        foreach ($values as $fieldname => $value) {
+        foreach ($values as $fieldid => $value) {
             if ($value === '' || $value === null) {
                 continue;
             }
 
             $DB->insert_record('confsubmissions_fieldval', (object) [
                 'submissionid' => $submissionid,
-                'fieldname'    => $fieldname,
+                'fieldid'      => $fieldid,
                 'value'        => $value,
             ]);
         }
+    }
+
+    /**
+     * Validates a field type against the fixed allow-list (confsubmissions_field_types()
+     * in lib.php).
+     *
+     * @param string $type
+     * @return void
+     * @throws \invalid_parameter_exception if $type is not a recognised field type
+     */
+    protected static function validate_field_type(string $type): void {
+        if (!in_array($type, confsubmissions_field_types(), true)) {
+            throw new \invalid_parameter_exception(get_string('error:invalidfieldtype', 'mod_confsubmissions'));
+        }
+    }
+
+    /**
+     * Validates a 'menu'-type field's options: at least one non-blank choice.
+     * Meaningless (and not checked) for any other field type.
+     *
+     * @param string|null $options
+     * @return void
+     * @throws \invalid_parameter_exception if $options has no non-blank choice
+     */
+    protected static function validate_field_menu_options(?string $options): void {
+        if (empty(confsubmissions_parse_field_options($options))) {
+            throw new \invalid_parameter_exception(get_string('error:invalidfieldoptions', 'mod_confsubmissions'));
+        }
+    }
+
+    /**
+     * Adds a new optional field to an instance, appended to the end of the sort order.
+     *
+     * @param int $confsubmissionsid The confsubmissions instance id
+     * @param string $name The field's display label
+     * @param string $type One of confsubmissions_field_types()
+     * @param string|null $options Newline-separated choices; only meaningful when $type is 'menu'
+     * @param bool $required Whether a presenter must answer this field
+     * @return int The id of the newly inserted field
+     * @throws \invalid_parameter_exception if $type is invalid, or $type is 'menu' with no choices
+     */
+    public static function add_field(
+        int $confsubmissionsid,
+        string $name,
+        string $type,
+        ?string $options,
+        bool $required
+    ): int {
+        global $DB;
+
+        self::validate_field_type($type);
+        if ($type === 'menu') {
+            self::validate_field_menu_options($options);
+        }
+
+        $maxsortorder = (int) $DB->get_field_sql(
+            'SELECT MAX(sortorder) FROM {confsubmissions_field} WHERE confsubmissions = ?',
+            [$confsubmissionsid]
+        );
+
+        $record = (object) [
+            'confsubmissions' => $confsubmissionsid,
+            'name'            => $name,
+            'type'            => $type,
+            'options'         => $type === 'menu' ? $options : null,
+            'required'        => $required ? 1 : 0,
+            'sortorder'       => $maxsortorder + 1,
+        ];
+
+        return $DB->insert_record('confsubmissions_field', $record);
+    }
+
+    /**
+     * Updates an optional field's name, type, options and required flag in place
+     * (sortorder is untouched).
+     *
+     * @param int $fieldid The confsubmissions_field id
+     * @param string $name The field's display label
+     * @param string $type One of confsubmissions_field_types()
+     * @param string|null $options Newline-separated choices; only meaningful when $type is 'menu'
+     * @param bool $required Whether a presenter must answer this field
+     * @return void
+     * @throws \invalid_parameter_exception if $type is invalid, or $type is 'menu' with no choices
+     */
+    public static function update_field(int $fieldid, string $name, string $type, ?string $options, bool $required): void {
+        global $DB;
+
+        self::validate_field_type($type);
+        if ($type === 'menu') {
+            self::validate_field_menu_options($options);
+        }
+
+        $DB->update_record('confsubmissions_field', (object) [
+            'id'       => $fieldid,
+            'name'     => $name,
+            'type'     => $type,
+            'options'  => $type === 'menu' ? $options : null,
+            'required' => $required ? 1 : 0,
+        ]);
+    }
+
+    /**
+     * Deletes an optional field, and every answer previously given to it. Unlike
+     * delete_track()/delete_submission_type(), a submission's existing answers are
+     * deleted outright rather than left dangling: a confsubmissions_fieldval row without
+     * its field has no name, type, or meaning left to display.
+     *
+     * @param int $fieldid The confsubmissions_field id
+     * @return bool
+     */
+    public static function delete_field(int $fieldid): bool {
+        global $DB;
+
+        $DB->delete_records('confsubmissions_fieldval', ['fieldid' => $fieldid]);
+
+        return $DB->delete_records('confsubmissions_field', ['id' => $fieldid]);
     }
 }

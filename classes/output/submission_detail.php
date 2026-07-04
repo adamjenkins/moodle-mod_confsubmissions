@@ -35,7 +35,10 @@ class submission_detail implements renderable, templatable {
     /** @var stdClass[] Speaker records, in sort order */
     protected $speakers;
 
-    /** @var array Optional field values keyed by fieldname */
+    /** @var stdClass[] This instance's optional-field configuration rows, keyed by id */
+    protected $fields;
+
+    /** @var array Optional field values keyed by fieldid */
     protected $fieldvalues;
 
     /** @var string|null The track name, or null if unassigned */
@@ -52,7 +55,8 @@ class submission_detail implements renderable, templatable {
      *
      * @param stdClass $submission The submission record
      * @param array $speakers Speaker records, in sort order
-     * @param array $fieldvalues Optional field values keyed by fieldname
+     * @param array $fields This instance's optional-field configuration rows, keyed by id
+     * @param array $fieldvalues Optional field values keyed by fieldid
      * @param string|null $trackname The track name, or null if unassigned
      * @param bool $canedit Whether the current user may edit this submission
      * @param \moodle_url|null $editurl The edit URL, when $canedit is true
@@ -60,6 +64,7 @@ class submission_detail implements renderable, templatable {
     public function __construct(
         stdClass $submission,
         array $speakers,
+        array $fields,
         array $fieldvalues,
         ?string $trackname,
         bool $canedit,
@@ -67,6 +72,7 @@ class submission_detail implements renderable, templatable {
     ) {
         $this->submission = $submission;
         $this->speakers = $speakers;
+        $this->fields = $fields;
         $this->fieldvalues = $fieldvalues;
         $this->trackname = $trackname;
         $this->canedit = $canedit;
@@ -97,13 +103,15 @@ class submission_detail implements renderable, templatable {
         }
 
         $fields = [];
-        foreach ($this->fieldvalues as $fieldname => $value) {
+        foreach ($this->fields as $field) {
+            $value = $this->fieldvalues[$field->id] ?? '';
             if ($value === '' || $value === null) {
                 continue;
             }
+
             $fields[] = [
-                'label' => get_string('field_' . $fieldname, 'mod_confsubmissions'),
-                'value' => $value,
+                'label' => format_string($field->name),
+                'value' => $this->format_field_value($field, $value),
             ];
         }
 
@@ -120,5 +128,30 @@ class submission_detail implements renderable, templatable {
             'canedit'       => $this->canedit,
             'editurl'       => $this->editurl ? $this->editurl->out(false) : null,
         ];
+    }
+
+    /**
+     * Formats a single optional-field answer for display, per its own field type.
+     * The template renders 'value' as escaped plain text (see submission_detail.mustache),
+     * so this never needs to (and must not) return raw HTML.
+     *
+     * @param stdClass $field The confsubmissions_field configuration row
+     * @param string $value The raw stored value (never '' -- callers already skip that)
+     * @return string
+     */
+    protected function format_field_value(stdClass $field, string $value): string {
+        switch ($field->type) {
+            case 'checkbox':
+                return $value === '1' ? get_string('yes') : get_string('no');
+            case 'date':
+                return userdate((int) $value, get_string('strftimedate'));
+            case 'menu':
+            case 'text':
+            case 'textarea':
+            case 'number':
+            case 'url':
+            default:
+                return format_string($value, true, ['escape' => false]);
+        }
     }
 }

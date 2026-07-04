@@ -272,6 +272,44 @@ final class submission_form_test extends advanced_testcase {
     }
 
     /**
+     * A required optional field is enforced server-side, and a 'menu'-type field
+     * rejects a choice outside its own configured options (Revision round 1 follow-up,
+     * 2026-07-04: dynamic, organiser-named/typed optional fields).
+     */
+    public function test_optional_field_required_and_menu_choice_validated(): void {
+        $this->resetAfterTest();
+
+        $course = $this->getDataGenerator()->create_course();
+        $instance = $this->getDataGenerator()->create_module('confsubmissions', [
+            'course' => $course->id, 'titlelimit' => 0, 'abstractlimit' => 0,
+        ]);
+        $cm = get_coursemodule_from_instance('confsubmissions', $instance->id);
+
+        $requiredid = api::add_field((int) $instance->id, 'Company', 'text', null, true);
+        $menuid = api::add_field((int) $instance->id, 'Length', 'menu', "15 min\n30 min", false);
+
+        $form = new submission_form(null, [
+            'cmid'            => $cm->id,
+            'confsubmissions' => $instance,
+            'speakers'        => [],
+        ]);
+
+        $data = $this->base_data('Title', 'Abstract');
+        $errors = $form->validation($data, []);
+        $this->assertArrayHasKey('field_' . $requiredid, $errors);
+
+        $data['field_' . $requiredid] = 'Acme Inc';
+        $data['field_' . $menuid] = '45 min';
+        $errors = $form->validation($data, []);
+        $this->assertArrayHasKey('field_' . $menuid, $errors);
+
+        $data['field_' . $menuid] = '30 min';
+        $errors = $form->validation($data, []);
+        $this->assertArrayNotHasKey('field_' . $requiredid, $errors);
+        $this->assertArrayNotHasKey('field_' . $menuid, $errors);
+    }
+
+    /**
      * More than MAX_SPEAKERS rows fails validation.
      */
     public function test_too_many_speakers_rejected(): void {
@@ -367,18 +405,57 @@ final class submission_form_test extends advanced_testcase {
     }
 
     /**
-     * extract_optional_fields() only extracts values for the enabled fieldnames given.
+     * extract_optional_fields() only extracts values for the fields given, trimming
+     * plain text/textarea/menu/number/url values as-is.
      */
     public function test_extract_optional_fields(): void {
         $this->resetAfterTest();
 
+        $fields = [
+            (object) ['id' => 1, 'type' => 'text'],
+            (object) ['id' => 2, 'type' => 'text'],
+        ];
         $data = (object) [
-            'field_language' => 'English',
-            'field_subtopic' => '',
+            'field_1' => 'English',
+            'field_2' => '',
         ];
 
-        $values = submission_form::extract_optional_fields($data, ['language', 'subtopic']);
+        $values = submission_form::extract_optional_fields($data, $fields);
 
-        $this->assertSame(['language' => 'English', 'subtopic' => ''], $values);
+        $this->assertSame([1 => 'English', 2 => ''], $values);
+    }
+
+    /**
+     * extract_optional_fields() stores a checkbox as an explicit '0'/'1' (never ''),
+     * since an unanswered checkbox would otherwise be indistinguishable from one
+     * explicitly answered "no".
+     */
+    public function test_extract_optional_fields_checkbox(): void {
+        $this->resetAfterTest();
+
+        $fields = [(object) ['id' => 5, 'type' => 'checkbox']];
+
+        $values = submission_form::extract_optional_fields((object) ['field_5' => 1], $fields);
+        $this->assertSame([5 => '1'], $values);
+
+        $values = submission_form::extract_optional_fields((object) ['field_5' => 0], $fields);
+        $this->assertSame([5 => '0'], $values);
+    }
+
+    /**
+     * extract_optional_fields() stores a date field's timestamp as a string, or '' when
+     * its date_selector "enable" checkbox was left unchecked (submitting 0).
+     */
+    public function test_extract_optional_fields_date(): void {
+        $this->resetAfterTest();
+
+        $fields = [(object) ['id' => 7, 'type' => 'date']];
+        $timestamp = 1735689600;
+
+        $values = submission_form::extract_optional_fields((object) ['field_7' => $timestamp], $fields);
+        $this->assertSame([7 => (string) $timestamp], $values);
+
+        $values = submission_form::extract_optional_fields((object) ['field_7' => 0], $fields);
+        $this->assertSame([7 => ''], $values);
     }
 }

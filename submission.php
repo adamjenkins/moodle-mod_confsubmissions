@@ -61,6 +61,7 @@ $PAGE->set_heading(format_string($course->fullname));
 $PAGE->set_context($context);
 
 $speakers = api::get_speakers($submission->id);
+$fields = api::get_fields($confsubmissions->id);
 $fieldvalues = api::get_optional_field_values($submission->id);
 
 $trackname = null;
@@ -79,7 +80,7 @@ $editurl = $canedit
     ? new moodle_url('/mod/confsubmissions/edit.php', ['id' => $cm->id, 'submissionid' => $submission->id])
     : null;
 
-$detail = new submission_detail($submission, $speakers, $fieldvalues, $trackname, $canedit, $editurl);
+$detail = new submission_detail($submission, $speakers, $fields, $fieldvalues, $trackname, $canedit, $editurl);
 
 echo $OUTPUT->header();
 echo $OUTPUT->heading(format_string($confsubmissions->name), 2);

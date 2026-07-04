@@ -258,6 +258,8 @@ final class api_test extends advanced_testcase {
         global $DB;
 
         $confsubmissions = $this->create_instance();
+        $languagefieldid = api::add_field($confsubmissions->id, 'Language', 'text', null, false);
+        $subtopicfieldid = api::add_field($confsubmissions->id, 'Sub-topic', 'text', null, false);
         $submissionid = $DB->insert_record('confsubmissions_submission', (object) [
             'confsubmissions' => $confsubmissions->id,
             'userid'          => 2,
@@ -269,46 +271,87 @@ final class api_test extends advanced_testcase {
         ]);
 
         api::sync_optional_fields($submissionid, [
-            'language'        => 'English',
-            'teachingcontext' => '',
-            'subtopic'        => 'Testing',
+            $languagefieldid => 'English',
+            $subtopicfieldid => 'Testing',
         ]);
 
         $values = api::get_optional_field_values($submissionid);
-        $this->assertSame(['language' => 'English', 'subtopic' => 'Testing'], $values);
+        $this->assertSame([$languagefieldid => 'English', $subtopicfieldid => 'Testing'], $values);
 
-        api::sync_optional_fields($submissionid, ['language' => '', 'subtopic' => 'Replaced']);
+        api::sync_optional_fields($submissionid, [$languagefieldid => '', $subtopicfieldid => 'Replaced']);
         $values = api::get_optional_field_values($submissionid);
-        $this->assertSame(['subtopic' => 'Replaced'], $values);
+        $this->assertSame([$subtopicfieldid => 'Replaced'], $values);
     }
 
     /**
-     * get_enabled_fieldnames() returns only the fields marked enabled, in sortorder.
+     * add_field()/update_field()/delete_field() CRUD, including menu-type option
+     * validation and cascading deletion of a field's own answers (Revision round 1
+     * follow-up, 2026-07-04: dynamic, organiser-named/typed optional fields).
      */
-    public function test_get_enabled_fieldnames(): void {
+    public function test_field_crud(): void {
         $this->resetAfterTest();
         global $DB;
 
-        // The generator's confsubmissions_add_instance() call already upserts a
-        // confsubmissions_field row per fixed fieldname (all disabled by default, since
-        // the generator does not tick any of the mod_form.php checkboxes). Enable two
-        // of the three here, leaving 'teachingcontext' disabled.
         $confsubmissions = $this->create_instance();
 
-        $DB->set_field(
-            'confsubmissions_field',
-            'enabled',
-            1,
-            ['confsubmissions' => $confsubmissions->id, 'fieldname' => 'language']
-        );
-        $DB->set_field(
-            'confsubmissions_field',
-            'enabled',
-            1,
-            ['confsubmissions' => $confsubmissions->id, 'fieldname' => 'subtopic']
-        );
+        $textid = api::add_field($confsubmissions->id, 'Company', 'text', null, false);
+        $menuid = api::add_field($confsubmissions->id, 'Session length', 'menu', "15 min\n30 min\n60 min", true);
 
-        $enabled = api::get_enabled_fieldnames($confsubmissions->id);
-        $this->assertSame(['language', 'subtopic'], $enabled);
+        $fields = api::get_fields($confsubmissions->id);
+        $this->assertCount(2, $fields);
+        $this->assertSame('Company', $fields[$textid]->name);
+        $this->assertSame('menu', $fields[$menuid]->type);
+        $this->assertSame(1, (int) $fields[$menuid]->required);
+
+        api::update_field($textid, 'Company name', 'text', null, true);
+        $updated = api::get_field($textid);
+        $this->assertSame('Company name', $updated->name);
+        $this->assertSame(1, (int) $updated->required);
+
+        $submissionid = $DB->insert_record('confsubmissions_submission', (object) [
+            'confsubmissions' => $confsubmissions->id,
+            'userid'          => 2,
+            'title'           => 'Test submission',
+            'abstract'        => 'Abstract text',
+            'status'          => 'submitted',
+            'timecreated'     => time(),
+            'timemodified'    => time(),
+        ]);
+        api::sync_optional_fields($submissionid, [$textid => 'Acme Inc']);
+
+        $result = api::delete_field($textid);
+        $this->assertTrue($result);
+        $this->assertFalse($DB->record_exists('confsubmissions_field', ['id' => $textid]));
+        // Unlike delete_track()/delete_submission_type(), a deleted field's own answers
+        // are removed outright, not left dangling -- see delete_field()'s docblock.
+        $this->assertSame([], api::get_optional_field_values($submissionid));
+
+        $remaining = api::get_fields($confsubmissions->id);
+        $this->assertCount(1, $remaining);
+    }
+
+    /**
+     * A 'menu'-type field must have at least one non-blank choice; every other type
+     * ignores $options entirely.
+     */
+    public function test_field_menu_requires_options(): void {
+        $this->resetAfterTest();
+
+        $confsubmissions = $this->create_instance();
+
+        $this->expectException(\invalid_parameter_exception::class);
+        api::add_field($confsubmissions->id, 'Bad menu', 'menu', "\n  \n", false);
+    }
+
+    /**
+     * An unrecognised field type is rejected.
+     */
+    public function test_field_type_must_be_recognised(): void {
+        $this->resetAfterTest();
+
+        $confsubmissions = $this->create_instance();
+
+        $this->expectException(\invalid_parameter_exception::class);
+        api::add_field($confsubmissions->id, 'Bad type', 'not-a-real-type', null, false);
     }
 }

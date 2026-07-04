@@ -51,6 +51,9 @@ class submission_form extends \moodleform {
      */
     protected $submissiontypeoptionids = [];
 
+    /** @var \stdClass[] This instance's optional-field configuration rows, set by definition(). */
+    protected $fields = [];
+
     /**
      * Defines the form fields.
      */
@@ -107,10 +110,54 @@ class submission_form extends \moodleform {
             $mform->addRule('submissiontypeid', get_string('required'), 'required', null, 'client');
         }
 
-        // Fixed optional fields, only rendered when enabled for this instance.
-        foreach (api::get_enabled_fieldnames($cs->id) as $fieldname) {
-            $mform->addElement('text', 'field_' . $fieldname, get_string('field_' . $fieldname, 'mod_confsubmissions'));
-            $mform->setType('field_' . $fieldname, PARAM_TEXT);
+        // Organiser-defined optional fields (Revision round 1 follow-up, 2026-07-04):
+        // each is rendered with the moodleform element matching its own chosen type.
+        // Named 'field_<id>', not 'field_<name>': a field's name is freely organiser-
+        // chosen (and editable later on fields.php), so unlike the old fixed vocabulary
+        // it cannot double as a stable form-element identifier.
+        $this->fields = api::get_fields($cs->id);
+        foreach ($this->fields as $field) {
+            $elname = 'field_' . $field->id;
+            $label = format_string($field->name);
+
+            switch ($field->type) {
+                case 'textarea':
+                    $mform->addElement('textarea', $elname, $label, ['rows' => 4, 'cols' => 60]);
+                    $mform->setType($elname, PARAM_TEXT);
+                    break;
+                case 'menu':
+                    $choices = array_combine(
+                        confsubmissions_parse_field_options($field->options),
+                        confsubmissions_parse_field_options($field->options)
+                    );
+                    $mform->addElement('select', $elname, $label, ['' => get_string('choosedots')] + $choices);
+                    $mform->setType($elname, PARAM_TEXT);
+                    break;
+                case 'checkbox':
+                    $mform->addElement('advcheckbox', $elname, $label);
+                    $mform->setType($elname, PARAM_INT);
+                    break;
+                case 'number':
+                    $mform->addElement('text', $elname, $label, ['size' => 10]);
+                    $mform->setType($elname, PARAM_RAW_TRIMMED);
+                    break;
+                case 'date':
+                    $mform->addElement('date_selector', $elname, $label, ['optional' => true]);
+                    break;
+                case 'url':
+                    $mform->addElement('text', $elname, $label, ['size' => 60]);
+                    $mform->setType($elname, PARAM_URL);
+                    break;
+                case 'text':
+                default:
+                    $mform->addElement('text', $elname, $label, ['size' => 60]);
+                    $mform->setType($elname, PARAM_TEXT);
+                    break;
+            }
+
+            if (!empty($field->required)) {
+                $mform->addRule($elname, get_string('required'), 'required', null, 'client');
+            }
         }
 
         // Speakers: a repeating group. Row 0 is the primary presenter (defaults to the
@@ -263,6 +310,45 @@ class submission_form extends \moodleform {
             }
         }
 
+        // Organiser-defined optional fields: a required check plus type-specific
+        // validation. The "required" rule attached in definition() is deliberately
+        // client-only (matching every other 'required' rule in this form, e.g. title/
+        // abstract) so it is re-checked here explicitly rather than relying on it --
+        // formslib's own server-side validation cycle skips a rule registered with the
+        // 'client' validation context, so it would otherwise never be enforced against a
+        // JS-disabled or crafted request. A blank, non-required answer is always fine
+        // regardless of type.
+        foreach ($this->fields as $field) {
+            $elname = 'field_' . $field->id;
+            $submitted = $data[$elname] ?? '';
+
+            // A date field submits an int timestamp (0 meaning its own "enable"
+            // checkbox was left unchecked); a checkbox submits 0/1. Neither is
+            // meaningfully "blank" as a trimmed string the way every other type is.
+            if ($field->type === 'date' || $field->type === 'checkbox') {
+                $isblank = empty($submitted);
+                $raw = (string) $submitted;
+            } else {
+                $raw = trim((string) $submitted);
+                $isblank = $raw === '';
+            }
+
+            if ($isblank) {
+                if (!empty($field->required)) {
+                    $errors[$elname] = get_string('required');
+                }
+                continue;
+            }
+
+            if ($field->type === 'number' && !is_numeric($raw)) {
+                $errors[$elname] = get_string('error:invalidfieldnumber', 'mod_confsubmissions');
+            } else if ($field->type === 'url' && clean_param($raw, PARAM_URL) === '') {
+                $errors[$elname] = get_string('error:invalidfieldurl', 'mod_confsubmissions');
+            } else if ($field->type === 'menu' && !in_array($raw, confsubmissions_parse_field_options($field->options), true)) {
+                $errors[$elname] = get_string('error:invalidfieldoption', 'mod_confsubmissions');
+            }
+        }
+
         if (limits::exceeds($data['title'] ?? '', (int) $cs->titlelimit, $cs->titlelimittype)) {
             $errors['title'] = get_string('error:titletoolong', 'mod_confsubmissions', [
                 'limit' => $cs->titlelimit,
@@ -385,17 +471,30 @@ class submission_form extends \moodleform {
     }
 
     /**
-     * Extracts the submitted optional-field values into fieldname => value pairs
-     * for \mod_confsubmissions\api::sync_optional_fields().
+     * Extracts the submitted optional-field values into fieldid => value pairs for
+     * \mod_confsubmissions\api::sync_optional_fields(), formatting each per its own
+     * field type: a date_selector's timestamp (0 when its "enable" checkbox is
+     * unchecked) becomes a string timestamp or '' ; a checkbox's 0/1 becomes an
+     * explicit '0'/'1' (unlike every other type, an unanswered checkbox is
+     * indistinguishable from "answered no" unless it is stored explicitly -- see
+     * sync_optional_fields()'s docblock for why an empty string means "no answer").
      *
      * @param \stdClass $data The validated form data (as returned by get_data())
-     * @param string[] $enabledfieldnames The optional fields enabled for this instance
-     * @return array Values keyed by fieldname
+     * @param \stdClass[] $fields This instance's optional-field configuration rows
+     * @return array Values keyed by fieldid
      */
-    public static function extract_optional_fields(\stdClass $data, array $enabledfieldnames): array {
+    public static function extract_optional_fields(\stdClass $data, array $fields): array {
         $values = [];
-        foreach ($enabledfieldnames as $fieldname) {
-            $values[$fieldname] = trim((string) ($data->{'field_' . $fieldname} ?? ''));
+        foreach ($fields as $field) {
+            $raw = $data->{'field_' . $field->id} ?? '';
+
+            if ($field->type === 'checkbox') {
+                $values[$field->id] = !empty($raw) ? '1' : '0';
+            } else if ($field->type === 'date') {
+                $values[$field->id] = !empty($raw) ? (string) (int) $raw : '';
+            } else {
+                $values[$field->id] = trim((string) $raw);
+            }
         }
         return $values;
     }

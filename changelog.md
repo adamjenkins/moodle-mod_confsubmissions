@@ -86,3 +86,42 @@
     belonging to a different instance; a real submission's chosen type
     correctly persisted end to end into `mod_confscheduler`'s unscheduled
     panel and the resulting scheduled block's duration.
+- Revision round 1, follow-up (user feedback, 2026-07-04): **dynamic,
+  organiser-defined optional fields**, replacing the fixed, closed set of
+  three checkboxes (language/teaching context/sub-topic) that previously
+  lived directly in `mod_form.php`. Schema migrated (`2026070206`):
+  `confsubmissions_field` gained `name`/`type`/`options`/`required` and
+  dropped `fieldname`/`enabled`; `confsubmissions_fieldval` switched from a
+  `fieldname` string key to a `fieldid` FK, since a field's machine identity
+  is now its row id, not a fixed vocabulary string. A real `db/upgrade.php`
+  migration backfills `name`/`type` from the old fixed fieldname for any
+  pre-existing row (deleting one that was never enabled outright, since it
+  was never shown to a presenter and carries no data) and re-keys existing
+  answers from fieldname to fieldid.
+  - `fields.php` (new, gated on the existing `mod/confsubmissions:managetracks`
+    capability, matching `tracks.php`/`submissiontypes.php`) gives organisers
+    full CRUD: each field gets a freely-chosen display label and one of seven
+    types -- short text, long text, dropdown, checkbox, date, number, web
+    address -- inspired by (a deliberately smaller subset of) `mod_data`'s
+    field type system, scoped to what a submission form realistically needs.
+    A dropdown field also takes a newline-separated choice list.
+  - The submission form (`classes/form/submission_form.php`) renders each
+    field with the moodleform element matching its own type, named
+    `field_<id>` (not `field_<name>`, since a field's name is now freely
+    organiser-chosen and editable later). Each field's `required` flag is
+    enforced server-side explicitly in `validation()`, not merely via the
+    client-only `addRule()` also attached -- formslib's own server-side
+    validation cycle skips a rule registered with the `'client'` context, so
+    relying on it alone would let a required field be silently bypassed by a
+    JS-disabled or crafted request. A caught-in-review PHPUnit failure during
+    this work confirmed the gap before it shipped.
+  - 35/35 PHPUnit passing (was 30), phpcs/moodlecheck clean. Verified live
+    end to end for all three non-trivial types: a required text field
+    blocks submission until answered; a dropdown offers exactly its
+    configured choices and rejects a tampered one server-side; a checkbox
+    persists as an explicit `'0'`/`'1'` (never the empty string used
+    elsewhere for "no answer", since an unanswered checkbox would otherwise
+    be indistinguishable from one explicitly answered "no"); and the
+    read-only submission detail view renders each type correctly (a
+    checkbox as Yes/No, a date formatted via `userdate()`, everything else
+    as plain text).

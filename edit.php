@@ -97,15 +97,19 @@ $mform = new submission_form($pageurl, [
 ]);
 
 if ($submission) {
-    $enabledfields = api::get_enabled_fieldnames($confsubmissions->id);
+    $fields = api::get_fields($confsubmissions->id);
     $fieldvalues = api::get_optional_field_values($submission->id);
 
     $formdata = clone $submission;
     $formdata->trackid = $submission->trackid ?? 0;
     $formdata->submissiontypeid = $submission->submissiontypeid ?? 0;
 
-    foreach ($enabledfields as $fieldname) {
-        $formdata->{'field_' . $fieldname} = $fieldvalues[$fieldname] ?? '';
+    foreach ($fields as $field) {
+        $raw = $fieldvalues[$field->id] ?? '';
+        // A date_selector element expects a unix timestamp (0 renders as its "enable"
+        // checkbox unchecked), not the empty string sync_optional_fields() stores for
+        // "no answer".
+        $formdata->{'field_' . $field->id} = $field->type === 'date' ? (int) $raw : $raw;
     }
 
     $speakerdata = [
@@ -158,8 +162,8 @@ if ($mform->is_cancelled()) {
 
     api::sync_speakers($newsubmissionid, submission_form::extract_speakers($data));
 
-    $enabledfields = api::get_enabled_fieldnames($confsubmissions->id);
-    api::sync_optional_fields($newsubmissionid, submission_form::extract_optional_fields($data, $enabledfields));
+    $fields = api::get_fields($confsubmissions->id);
+    api::sync_optional_fields($newsubmissionid, submission_form::extract_optional_fields($data, $fields));
 
     redirect($viewurl, get_string('submissionsaved', 'mod_confsubmissions'), null, \core\output\notification::NOTIFY_SUCCESS);
 }

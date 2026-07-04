@@ -88,6 +88,10 @@ if ($canmanagetracks) {
         new moodle_url('/mod/confsubmissions/submissiontypes.php', ['id' => $cm->id]),
         get_string('managesubmissiontypes', 'mod_confsubmissions')
     );
+    $links[] = html_writer::link(
+        new moodle_url('/mod/confsubmissions/fields.php', ['id' => $cm->id]),
+        get_string('managefields', 'mod_confsubmissions')
+    );
 }
 if ($canmanageform) {
     $links[] = html_writer::link(

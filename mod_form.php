@@ -29,10 +29,12 @@ require_once($CFG->dirroot . '/course/moodleform_mod.php');
 /**
  * Settings form for the Conference Submissions activity.
  *
- * Covers the instance-level limits, open/close window, and the fixed
- * optional-field toggles (language, teaching context, sub-topic area). Track
- * management lives on its own screen (tracks.php) rather than in this form;
- * see the note above the coursemodule elements below for why.
+ * Covers only the instance-level limits and open/close window. Track
+ * management (tracks.php), submission types (submissiontypes.php), and
+ * optional fields (fields.php, Revision round 1 follow-up 2026-07-04 --
+ * previously a fixed set of three checkboxes lived directly in this form)
+ * all live on their own screens rather than in this form; see the note
+ * above the coursemodule elements below for why.
  */
 class mod_confsubmissions_mod_form extends moodleform_mod {
     /**
@@ -114,52 +116,18 @@ class mod_confsubmissions_mod_form extends moodleform_mod {
         $mform->setDefault('abstractlimittype', 'chars');
         $mform->addHelpButton('abstractlimitgroup', 'abstractlimit', 'mod_confsubmissions');
 
-        // Optional fields section: fixed on/off toggles, not free-form custom fields.
-        // Each checkbox corresponds to a confsubmissions_field row (fieldname must match
-        // confsubmissions_optional_fieldnames() in lib.php exactly).
-        $mform->addElement('header', 'optionalfields', get_string('optionalfields', 'mod_confsubmissions'));
-        $mform->setExpanded('optionalfields');
-
-        $mform->addElement('advcheckbox', 'field_language', get_string('field_language', 'mod_confsubmissions'));
-        $mform->addElement(
-            'advcheckbox',
-            'field_teachingcontext',
-            get_string('field_teachingcontext', 'mod_confsubmissions')
-        );
-        $mform->addElement('advcheckbox', 'field_subtopic', get_string('field_subtopic', 'mod_confsubmissions'));
-
-        // Track management (add/remove/reorder confsubmissions_track rows) is deliberately
-        // not part of this form: tracks are FK'd to the instance id, so they need an
-        // instance to already exist, and organisers need to manage them both before and
-        // after this settings form has been saved. See tracks.php, linked from this
-        // activity's navigation (confsubmissions_extend_navigation() in lib.php) for users
-        // with mod/confsubmissions:managetracks.
+        // Track management, submission types, and optional fields (add/remove/reorder
+        // confsubmissions_track / confsubmissions_submissiontype / confsubmissions_field
+        // rows) are deliberately not part of this form: they are FK'd to the instance id,
+        // so they need an instance to already exist, and organisers need to manage them
+        // both before and after this settings form has been saved. See tracks.php,
+        // submissiontypes.php and fields.php, linked from this activity's navigation for
+        // users with the relevant capability.
 
         // Standard module elements (visibility, groups, etc.).
         $this->standard_coursemodule_elements();
 
         $this->add_action_buttons();
-    }
-
-    /**
-     * Pre-processes data passed to set_data() before display, reading the existing
-     * confsubmissions_field rows back into field_* checkbox state when editing an
-     * existing instance.
-     *
-     * @param array $defaultvalues Reference to default values array
-     */
-    public function data_preprocessing(&$defaultvalues) {
-        global $DB;
-
-        if (empty($this->current->instance)) {
-            return;
-        }
-
-        $fields = $DB->get_records('confsubmissions_field', ['confsubmissions' => $this->current->instance]);
-
-        foreach ($fields as $field) {
-            $defaultvalues['field_' . $field->fieldname] = (int) $field->enabled;
-        }
     }
 
     /**
