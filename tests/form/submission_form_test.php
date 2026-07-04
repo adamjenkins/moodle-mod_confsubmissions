@@ -225,6 +225,53 @@ final class submission_form_test extends advanced_testcase {
     }
 
     /**
+     * A submission type is required once the instance has at least one configured
+     * (Revision round 1, 2026-07-04): omitting it, or submitting one belonging to a
+     * different instance, is rejected server-side.
+     */
+    public function test_submissiontypeid_required_when_types_exist(): void {
+        $this->resetAfterTest();
+
+        $course = $this->getDataGenerator()->create_course();
+        $instance = $this->getDataGenerator()->create_module('confsubmissions', [
+            'course' => $course->id, 'titlelimit' => 0, 'abstractlimit' => 0,
+        ]);
+        $cm = get_coursemodule_from_instance('confsubmissions', $instance->id);
+
+        api::add_submission_type((int) $instance->id, 'Lightning Talk', 15);
+        $foreigntypeid = api::add_submission_type($instance->id + 1000, 'Foreign type', 15);
+
+        $form = new submission_form(null, [
+            'cmid'            => $cm->id,
+            'confsubmissions' => $instance,
+            'speakers'        => [],
+        ]);
+
+        $data = $this->base_data('Title', 'Abstract');
+        $errors = $form->validation($data, []);
+        $this->assertArrayHasKey('submissiontypeid', $errors);
+
+        $data['submissiontypeid'] = $foreigntypeid;
+        $errors = $form->validation($data, []);
+        $this->assertArrayHasKey('submissiontypeid', $errors);
+    }
+
+    /**
+     * An instance with no submission types configured yet does not require one --
+     * the field simply is not rendered/validated (matches trackid's own "no tracks
+     * configured" degrade path).
+     */
+    public function test_submissiontypeid_optional_when_none_configured(): void {
+        $this->resetAfterTest();
+
+        $form = $this->build_form((object) ['titlelimit' => 0, 'abstractlimit' => 0]);
+
+        $data = $this->base_data('Title', 'Abstract');
+        $errors = $form->validation($data, []);
+        $this->assertArrayNotHasKey('submissiontypeid', $errors);
+    }
+
+    /**
      * More than MAX_SPEAKERS rows fails validation.
      */
     public function test_too_many_speakers_rejected(): void {

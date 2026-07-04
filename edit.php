@@ -102,6 +102,7 @@ if ($submission) {
 
     $formdata = clone $submission;
     $formdata->trackid = $submission->trackid ?? 0;
+    $formdata->submissiontypeid = $submission->submissiontypeid ?? 0;
 
     foreach ($enabledfields as $fieldname) {
         $formdata->{'field_' . $fieldname} = $fieldvalues[$fieldname] ?? '';
@@ -141,6 +142,7 @@ if ($mform->is_cancelled()) {
         'title'           => $data->title,
         'abstract'        => $data->abstract,
         'trackid'         => !empty($data->trackid) ? $data->trackid : null,
+        'submissiontypeid' => !empty($data->submissiontypeid) ? $data->submissiontypeid : null,
         'status'          => $submission->status ?? 'submitted',
         'timemodified'    => $now,
     ];

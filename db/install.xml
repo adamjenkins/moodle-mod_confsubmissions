@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" ?>
-<XMLDB PATH="mod/confsubmissions/db" VERSION="2026070204" COMMENT="XMLDB file for Moodle mod/confsubmissions"
+<XMLDB PATH="mod/confsubmissions/db" VERSION="2026070205" COMMENT="XMLDB file for Moodle mod/confsubmissions"
     xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
     xsi:noNamespaceSchemaLocation="../../../lib/xmldb/xmldb.xsd">
   <TABLES>
@@ -38,6 +38,19 @@
         <KEY NAME="confsubmissions" TYPE="foreign" FIELDS="confsubmissions" REFTABLE="confsubmissions" REFFIELDS="id"/>
       </KEYS>
     </TABLE>
+    <TABLE NAME="confsubmissions_submissiontype" COMMENT="Presentation types (e.g. Lightning Talk, Workshop) organisers configure per instance, each with a default duration in minutes">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="confsubmissions" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" DEFAULT="0" COMMENT="Foreign key to confsubmissions table"/>
+        <FIELD NAME="name" TYPE="char" LENGTH="255" NOTNULL="true" SEQUENCE="false" COMMENT="Submission type name, e.g. Lightning Talk, Workshop, Keynote"/>
+        <FIELD NAME="durationminutes" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" DEFAULT="30" COMMENT="Default presentation length in minutes for a submission of this type. Consumed by mod_confscheduler as the initial block length when a presentation of this type is first dragged into the grid or placed by the autoscheduler; the organiser can still resize an individual scheduled block afterwards (dragging its resize handle), which does not change this setting or retroactively affect other submissions of the same type"/>
+        <FIELD NAME="sortorder" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" DEFAULT="0"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="confsubmissions" TYPE="foreign" FIELDS="confsubmissions" REFTABLE="confsubmissions" REFFIELDS="id"/>
+      </KEYS>
+    </TABLE>
     <TABLE NAME="confsubmissions_field" COMMENT="Per-instance optional-field configuration (e.g. language, teaching context, sub-topic)">
       <FIELDS>
         <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
@@ -60,6 +73,7 @@
         <FIELD NAME="title" TYPE="char" LENGTH="255" NOTNULL="true" SEQUENCE="false" COMMENT="Submission title"/>
         <FIELD NAME="abstract" TYPE="text" NOTNULL="false" SEQUENCE="false" COMMENT="Submission abstract text"/>
         <FIELD NAME="trackid" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false" COMMENT="Foreign key to confsubmissions_track table; null if unassigned"/>
+        <FIELD NAME="submissiontypeid" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false" COMMENT="Foreign key to confsubmissions_submissiontype table; null if unassigned (e.g. the instance has no submission types configured, or this submission predates this feature)"/>
         <FIELD NAME="status" TYPE="char" LENGTH="20" NOTNULL="true" SEQUENCE="false" DEFAULT="submitted" COMMENT="Workflow status, e.g. submitted, accepted, rejected"/>
         <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" DEFAULT="0"/>
         <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" DEFAULT="0"/>
@@ -69,6 +83,7 @@
         <KEY NAME="confsubmissions" TYPE="foreign" FIELDS="confsubmissions" REFTABLE="confsubmissions" REFFIELDS="id"/>
         <KEY NAME="userid" TYPE="foreign" FIELDS="userid" REFTABLE="user" REFFIELDS="id"/>
         <KEY NAME="trackid" TYPE="foreign" FIELDS="trackid" REFTABLE="confsubmissions_track" REFFIELDS="id"/>
+        <KEY NAME="submissiontypeid" TYPE="foreign" FIELDS="submissiontypeid" REFTABLE="confsubmissions_submissiontype" REFFIELDS="id"/>
       </KEYS>
     </TABLE>
     <TABLE NAME="confsubmissions_speaker" COMMENT="Speakers (primary presenter and co-presenters) attached to a submission">

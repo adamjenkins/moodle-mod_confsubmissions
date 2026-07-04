@@ -17,6 +17,7 @@ Add a "Conference Submissions" activity to a course to open a call for abstracts
 - Speaker field defaults to the logged-in user; co-presenters can be added by searching for a user enrolled in the course, or by typing a name/email manually, in an organiser-visible, explicitly re-orderable display order.
 - Optional fields (presentation language, teaching context, sub-topic area) can be toggled on per instance.
 - Tracks for categorising submissions, each with an optional colour and icon (drawn from a curated, built-in set — never free text or an uploaded asset), used by downstream plugins for review assignment, scheduling, and coloured pill badges shown across the whole suite.
+- Submission types (e.g. Lightning Talk, Workshop), each with a default presentation duration in minutes, organiser-managed on their own screen. A presenter chooses their submission's type, which `mod_confscheduler` then uses as the initial length of the block when the presentation is first scheduled (still freely resizable afterwards).
 - A stable PHP API (`classes/api.php`) other conference-tools plugins build on.
 
 ## Requirements

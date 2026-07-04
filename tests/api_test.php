@@ -136,6 +136,75 @@ final class api_test extends advanced_testcase {
     }
 
     /**
+     * add_submission_type() appends types in increasing sortorder, update_submission_type()
+     * changes name/duration in place, and delete_submission_type() removes a type while
+     * leaving any submissions referencing it with no type (Revision round 1, 2026-07-04).
+     */
+    public function test_submission_type_crud(): void {
+        $this->resetAfterTest();
+        global $DB;
+
+        $confsubmissions = $this->create_instance();
+        $cm = get_coursemodule_from_instance('confsubmissions', $confsubmissions->id);
+
+        $typeid1 = api::add_submission_type($confsubmissions->id, 'Lightning Talk', 15);
+        $typeid2 = api::add_submission_type($confsubmissions->id, 'Workshop', 90);
+
+        $type1 = $DB->get_record('confsubmissions_submissiontype', ['id' => $typeid1]);
+        $type2 = $DB->get_record('confsubmissions_submissiontype', ['id' => $typeid2]);
+
+        $this->assertSame('Lightning Talk', $type1->name);
+        $this->assertSame(15, (int) $type1->durationminutes);
+        $this->assertSame('Workshop', $type2->name);
+        $this->assertSame(90, (int) $type2->durationminutes);
+        $this->assertGreaterThan((int) $type1->sortorder, (int) $type2->sortorder);
+
+        $types = api::get_submission_types((int) $cm->id);
+        $this->assertCount(2, $types);
+
+        api::update_submission_type($typeid1, 'Lightning Talk (updated)', 20);
+        $updated = api::get_submission_type($typeid1);
+        $this->assertSame('Lightning Talk (updated)', $updated->name);
+        $this->assertSame(20, (int) $updated->durationminutes);
+
+        // A submission referencing the type should have its submissiontypeid cleared,
+        // not be deleted.
+        $submissionid = $DB->insert_record('confsubmissions_submission', (object) [
+            'confsubmissions'  => $confsubmissions->id,
+            'userid'           => 2,
+            'title'            => 'Test submission',
+            'abstract'         => 'Abstract text',
+            'submissiontypeid' => $typeid1,
+            'status'           => 'submitted',
+            'timecreated'      => time(),
+            'timemodified'     => time(),
+        ]);
+
+        $result = api::delete_submission_type($typeid1);
+        $this->assertTrue($result);
+
+        $this->assertFalse($DB->record_exists('confsubmissions_submissiontype', ['id' => $typeid1]));
+        $submission = $DB->get_record('confsubmissions_submission', ['id' => $submissionid]);
+        $this->assertNull($submission->submissiontypeid);
+
+        $remaining = api::get_submission_types((int) $cm->id);
+        $this->assertCount(1, $remaining);
+    }
+
+    /**
+     * A non-positive duration is rejected by both add_submission_type() and
+     * update_submission_type().
+     */
+    public function test_submission_type_duration_must_be_positive(): void {
+        $this->resetAfterTest();
+
+        $confsubmissions = $this->create_instance();
+
+        $this->expectException(\invalid_parameter_exception::class);
+        api::add_submission_type($confsubmissions->id, 'Bad duration', 0);
+    }
+
+    /**
      * sync_speakers() replaces existing speaker rows, assigns role 'primary' to the
      * first row and 'co-presenter' to the rest, and correctly stores manually-entered
      * co-presenters (name/email, no userid) alongside enrolled-user speakers.

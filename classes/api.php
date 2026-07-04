@@ -242,6 +242,116 @@ class api {
     }
 
     /**
+     * Validates a submission type's duration: a positive whole number of minutes.
+     *
+     * @param int $durationminutes
+     * @return void
+     * @throws \invalid_parameter_exception if $durationminutes is not a positive integer
+     */
+    protected static function validate_duration(int $durationminutes): void {
+        if ($durationminutes <= 0) {
+            throw new \invalid_parameter_exception(get_string('error:invalidduration', 'mod_confsubmissions'));
+        }
+    }
+
+    /**
+     * Returns the submission types configured for the confsubmissions instance
+     * identified by a cmid, in sort order.
+     *
+     * @param int $cmid The course-module id
+     * @return \stdClass[] Array of submission type records, keyed by id
+     */
+    public static function get_submission_types(int $cmid): array {
+        global $DB;
+
+        $cm = get_coursemodule_from_id('confsubmissions', $cmid, 0, false, MUST_EXIST);
+
+        return $DB->get_records(
+            'confsubmissions_submissiontype',
+            ['confsubmissions' => $cm->instance],
+            'sortorder ASC'
+        );
+    }
+
+    /**
+     * Returns a single submission type record.
+     *
+     * @param int $id The confsubmissions_submissiontype id
+     * @return \stdClass|false The submission type record, or false if not found
+     */
+    public static function get_submission_type(int $id) {
+        global $DB;
+
+        return $DB->get_record('confsubmissions_submissiontype', ['id' => $id]);
+    }
+
+    /**
+     * Adds a new submission type to an instance, appended to the end of the sort order.
+     *
+     * @param int $confsubmissionsid The confsubmissions instance id
+     * @param string $name The submission type name
+     * @param int $durationminutes Default presentation duration in minutes for this type
+     * @return int The id of the newly inserted submission type
+     * @throws \invalid_parameter_exception if $durationminutes is not a positive integer
+     */
+    public static function add_submission_type(int $confsubmissionsid, string $name, int $durationminutes): int {
+        global $DB;
+
+        self::validate_duration($durationminutes);
+
+        $maxsortorder = (int) $DB->get_field_sql(
+            'SELECT MAX(sortorder) FROM {confsubmissions_submissiontype} WHERE confsubmissions = ?',
+            [$confsubmissionsid]
+        );
+
+        $record = (object) [
+            'confsubmissions' => $confsubmissionsid,
+            'name'            => $name,
+            'durationminutes' => $durationminutes,
+            'sortorder'       => $maxsortorder + 1,
+        ];
+
+        return $DB->insert_record('confsubmissions_submissiontype', $record);
+    }
+
+    /**
+     * Updates a submission type's name and duration in place (sortorder is untouched).
+     *
+     * @param int $submissiontypeid The confsubmissions_submissiontype id
+     * @param string $name The submission type name
+     * @param int $durationminutes Default presentation duration in minutes for this type
+     * @return void
+     * @throws \invalid_parameter_exception if $durationminutes is not a positive integer
+     */
+    public static function update_submission_type(int $submissiontypeid, string $name, int $durationminutes): void {
+        global $DB;
+
+        self::validate_duration($durationminutes);
+
+        $DB->update_record('confsubmissions_submissiontype', (object) [
+            'id'              => $submissiontypeid,
+            'name'            => $name,
+            'durationminutes' => $durationminutes,
+        ]);
+    }
+
+    /**
+     * Deletes a submission type. Submissions referencing it are left with no type
+     * (submissiontypeid null) rather than being deleted, matching delete_track()'s
+     * pattern.
+     *
+     * @param int $submissiontypeid The confsubmissions_submissiontype id
+     * @return bool
+     */
+    public static function delete_submission_type(int $submissiontypeid): bool {
+        global $DB;
+
+        $DB->set_field('confsubmissions_submission', 'submissiontypeid', null, ['submissiontypeid' => $submissiontypeid]);
+
+        return $DB->delete_records('confsubmissions_submissiontype', ['id' => $submissiontypeid]);
+    }
+
+    /**
      * Adds a new track to an instance, appended to the end of the sort order.
      *
      * @param int $confsubmissionsid The confsubmissions instance id

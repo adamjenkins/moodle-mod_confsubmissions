@@ -45,6 +45,13 @@ class submission_form extends \moodleform {
     protected $trackoptionids = [];
 
     /**
+     * @var int[] Valid submissiontypeid option keys for this instance (excludes the
+     *      sentinel 0, unlike $trackoptionids -- see definition()'s docblock for why
+     *      this field's presence/requiredness differs from trackid's). Set by definition().
+     */
+    protected $submissiontypeoptionids = [];
+
+    /**
      * Defines the form fields.
      */
     public function definition() {
@@ -77,6 +84,28 @@ class submission_form extends \moodleform {
         $this->trackoptionids = array_keys($trackoptions);
         $mform->addElement('select', 'trackid', get_string('track', 'mod_confsubmissions'), $trackoptions);
         $mform->setType('trackid', PARAM_INT);
+
+        // Unlike trackid (optional, with an explicit "no track" sentinel), a submission
+        // type is required -- but only once the organiser has actually configured at
+        // least one; an instance with none configured yet must not block submissions on
+        // a choice that does not exist (matches how an instance with zero tracks simply
+        // never shows the trackid field as mandatory either).
+        $submissiontypes = api::get_submission_types($cmid);
+        if ($submissiontypes) {
+            $submissiontypeoptions = ['' => get_string('choosedots')];
+            foreach ($submissiontypes as $submissiontype) {
+                $submissiontypeoptions[$submissiontype->id] = format_string($submissiontype->name);
+            }
+            $this->submissiontypeoptionids = array_map('intval', array_keys($submissiontypes));
+            $mform->addElement(
+                'select',
+                'submissiontypeid',
+                get_string('submissiontype', 'mod_confsubmissions'),
+                $submissiontypeoptions
+            );
+            $mform->setType('submissiontypeid', PARAM_INT);
+            $mform->addRule('submissiontypeid', get_string('required'), 'required', null, 'client');
+        }
 
         // Fixed optional fields, only rendered when enabled for this instance.
         foreach (api::get_enabled_fieldnames($cs->id) as $fieldname) {
@@ -223,6 +252,15 @@ class submission_form extends \moodleform {
 
         if (isset($data['trackid']) && !in_array((int) $data['trackid'], $this->trackoptionids, true)) {
             $errors['trackid'] = get_string('error:invalidtrack', 'mod_confsubmissions');
+        }
+
+        if ($this->submissiontypeoptionids) {
+            // The field is only rendered (and only required) when the instance has at
+            // least one submission type configured -- see definition()'s docblock.
+            $submissiontypeid = (int) ($data['submissiontypeid'] ?? 0);
+            if (!in_array($submissiontypeid, $this->submissiontypeoptionids, true)) {
+                $errors['submissiontypeid'] = get_string('error:invalidsubmissiontype', 'mod_confsubmissions');
+            }
         }
 
         if (limits::exceeds($data['title'] ?? '', (int) $cs->titlelimit, $cs->titlelimittype)) {

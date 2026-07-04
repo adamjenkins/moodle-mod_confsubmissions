@@ -61,3 +61,28 @@
     correctly on a new submission, a manually-entered co-presenter's mode
     and details survive a save-then-reload round trip, and the primary
     speaker's resolved name displays correctly throughout.
+- Revision round 1, follow-up (user feedback, 2026-07-04): **configurable
+  submission types with durations**. New `confsubmissions_submissiontype`
+  table (name + `durationminutes`, organiser-managed) and a nullable
+  `confsubmissions_submission.submissiontypeid` FK.
+  - `submissiontypes.php` (new, gated on the existing
+    `mod/confsubmissions:managetracks` capability -- no new capability was
+    needed for what is the same kind of instance-configuration screen as
+    `tracks.php`) gives organisers full CRUD, following that same screen's
+    IDOR-scoping pattern.
+  - The submission form now shows a required "Presentation type" select --
+    but only once the instance has at least one type configured, mirroring
+    how `trackid` degrades gracefully when an instance has no tracks. An
+    instance with none configured yet is never blocked from accepting
+    submissions on a choice that does not exist.
+  - `mod_confscheduler` consumes each submission's type duration as the
+    initial block length when it is first scheduled (both by dragging it
+    out of the unscheduled panel and via the autoscheduler), falling back
+    to a fixed default for a submission with no type. See that plugin's own
+    changelog for the corresponding removal of its now-meaningless
+    "default duration" autoscheduler setting.
+  - 30/30 PHPUnit passing (was 26), phpcs/moodlecheck clean. Verified live:
+    the type selector is required once types exist and rejects a type
+    belonging to a different instance; a real submission's chosen type
+    correctly persisted end to end into `mod_confscheduler`'s unscheduled
+    panel and the resulting scheduled block's duration.
