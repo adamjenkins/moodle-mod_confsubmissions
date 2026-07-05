@@ -347,6 +347,42 @@ final class api_test extends advanced_testcase {
     }
 
     /**
+     * get_disabled_dates() returns an empty array when nothing has been disabled yet,
+     * and set_disabled_dates() replaces the disabled set entirely on each call (mirrors
+     * sync_date_preferences()'s replace-not-append semantics), returning genuine ints.
+     */
+    public function test_get_and_set_disabled_dates(): void {
+        $this->resetAfterTest();
+        global $DB;
+
+        $confsubmissions = $this->create_instance();
+        $this->assertSame([], api::get_disabled_dates($confsubmissions));
+
+        $day1 = strtotime('2026-09-03 00:00:00');
+        $day2 = strtotime('2026-09-04 00:00:00');
+        api::set_disabled_dates((int) $confsubmissions->id, [$day2, $day1, $day1]);
+
+        $confsubmissions = $DB->get_record('confsubmissions', ['id' => $confsubmissions->id], '*', MUST_EXIST);
+        $disabled = api::get_disabled_dates($confsubmissions);
+        $this->assertSame([$day1, $day2], $disabled);
+        foreach ($disabled as $date) {
+            $this->assertIsInt($date);
+        }
+
+        // Re-setting replaces the old set entirely, not adding to it.
+        $day3 = strtotime('2026-09-05 00:00:00');
+        api::set_disabled_dates((int) $confsubmissions->id, [$day3]);
+        $confsubmissions = $DB->get_record('confsubmissions', ['id' => $confsubmissions->id], '*', MUST_EXIST);
+        $this->assertSame([$day3], api::get_disabled_dates($confsubmissions));
+
+        // Clearing back to an empty set stores null, not an empty string.
+        api::set_disabled_dates((int) $confsubmissions->id, []);
+        $confsubmissions = $DB->get_record('confsubmissions', ['id' => $confsubmissions->id], '*', MUST_EXIST);
+        $this->assertNull($confsubmissions->disableddates);
+        $this->assertSame([], api::get_disabled_dates($confsubmissions));
+    }
+
+    /**
      * add_field()/update_field()/delete_field() CRUD, including menu-type option
      * validation and cascading deletion of a field's own answers (Revision round 1
      * follow-up, 2026-07-04: dynamic, organiser-named/typed optional fields).

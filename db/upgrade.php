@@ -242,5 +242,19 @@ function xmldb_confsubmissions_upgrade($oldversion) {
         upgrade_mod_savepoint(true, 2026070504, 'confsubmissions');
     }
 
+    if ($oldversion < 2026070505) {
+        // Add an org-wide "disable specific preferred days" setting (user feedback,
+        // 2026-07-05): a regular submitter never sees a disabled day as a preferred-date
+        // checkbox, but a user with mod/confsubmissions:manageform (editingteacher+)
+        // still sees and can select every day, disabled or not -- see dates.php.
+        $table = new xmldb_table('confsubmissions');
+        $field = new xmldb_field('disableddates', XMLDB_TYPE_TEXT, null, null, null, null, null, 'offerpreferreddates');
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+
+        upgrade_mod_savepoint(true, 2026070505, 'confsubmissions');
+    }
+
     return true;
 }

@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+- User feedback (2026-07-05): "add a setting to disable specific 'preferred days'.
+  Still allow users with editingteacher to specify those days as preferred dates."
+  Adds a new `disableddates` column on the `confsubmissions` table (a comma-separated
+  list of the same local-midnight timestamps `api::get_conference_days()` produces)
+  plus `api::get_disabled_dates()`/`set_disabled_dates()`, and a new `dates.php`
+  management screen (linked from the activity's own navigation, gated by the existing
+  `mod/confsubmissions:manageform` capability) with one checkbox per conference day --
+  checking a day removes it from what a regular submitter is offered as a preferred
+  date. `submission_form.php` now filters its own `$this->conferencedays` for a
+  caller that does not pass the new `showalldays` customdata flag; `edit.php` passes
+  `true` for any user with `mod/confsubmissions:manageform` (editingteacher and
+  manager), so an organiser still sees and can select every day, disabled or not,
+  exactly as requested. A submission's existing preference for a day later disabled
+  is silently dropped on its next save (the checkbox is no longer rendered, so
+  `extract_preferred_dates()` never sees it) rather than erroring -- consistent with
+  every other "preference no longer offered" edge case already documented for this
+  feature. New tests: `test_get_and_set_disabled_dates` (api_test.php) and
+  `test_disabled_dates_excluded_unless_showalldays` (submission_form_test.php).
 - User feedback (2026-07-05): "add a setting to set conference dates (not required)
   as well as the option to 'offer preferred dates' to submitters. If enabled, a
   submitter should see an additional set of checkboxes for preferred dates with all

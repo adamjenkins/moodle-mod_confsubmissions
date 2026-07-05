@@ -159,6 +159,10 @@ if ($canmanageform) {
         new moodle_url('/course/modedit.php', ['update' => $cm->id, 'return' => 1]),
         get_string('editsettings')
     );
+    $links[] = html_writer::link(
+        new moodle_url('/mod/confsubmissions/dates.php', ['id' => $cm->id]),
+        get_string('managedisableddates', 'mod_confsubmissions')
+    );
 }
 if ($links) {
     echo html_writer::tag('p', implode(' | ', $links));

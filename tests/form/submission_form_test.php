@@ -458,4 +458,65 @@ final class submission_form_test extends advanced_testcase {
         $values = submission_form::extract_optional_fields((object) ['field_7' => 0], $fields);
         $this->assertSame([7 => ''], $values);
     }
+
+    /**
+     * An org-wide disabled day (api::set_disabled_dates(), user feedback, 2026-07-05)
+     * is left out of $this->conferencedays for a regular submitter, but a caller that
+     * passes the 'showalldays' customdata flag (a user with
+     * mod/confsubmissions:manageform) still sees every conference day, disabled or not.
+     */
+    public function test_disabled_dates_excluded_unless_showalldays(): void {
+        $this->resetAfterTest();
+
+        $course = $this->getDataGenerator()->create_course();
+        $instance = $this->getDataGenerator()->create_module('confsubmissions', [
+            'course'              => $course->id,
+            'titlelimit'          => 0,
+            'abstractlimit'       => 0,
+            'conferencestart'     => strtotime('2026-09-03 09:00:00'),
+            'conferenceend'       => strtotime('2026-09-05 17:00:00'),
+            'offerpreferreddates' => 1,
+        ]);
+        $cm = get_coursemodule_from_instance('confsubmissions', $instance->id);
+
+        $day1 = usergetmidnight(strtotime('2026-09-03 09:00:00'));
+        $day2 = usergetmidnight(strtotime('2026-09-04 09:00:00'));
+        $day3 = usergetmidnight(strtotime('2026-09-05 09:00:00'));
+        api::set_disabled_dates((int) $instance->id, [$day2]);
+
+        // Re-fetch: $instance is a stale in-memory copy from create_module(), predating
+        // the set_disabled_dates() call above -- the form must see the persisted value.
+        global $DB;
+        $instance = $DB->get_record('confsubmissions', ['id' => $instance->id], '*', MUST_EXIST);
+
+        $regularform = new submission_form(null, [
+            'cmid'            => $cm->id,
+            'confsubmissions' => $instance,
+            'speakers'        => [],
+        ]);
+        $regulardays = $this->conferencedays_of($regularform);
+        $this->assertSame([$day1, $day3], $regulardays);
+
+        $privilegedform = new submission_form(null, [
+            'cmid'            => $cm->id,
+            'confsubmissions' => $instance,
+            'speakers'        => [],
+            'showalldays'     => true,
+        ]);
+        $privilegeddays = $this->conferencedays_of($privilegedform);
+        $this->assertSame([$day1, $day2, $day3], $privilegeddays);
+    }
+
+    /**
+     * Reads submission_form's protected $conferencedays property, populated by
+     * definition() (invoked by simply constructing the form).
+     *
+     * @param submission_form $form
+     * @return int[]
+     */
+    private function conferencedays_of(submission_form $form): array {
+        $property = new \ReflectionProperty(submission_form::class, 'conferencedays');
+        $property->setAccessible(true);
+        return $property->getValue($form);
+    }
 }

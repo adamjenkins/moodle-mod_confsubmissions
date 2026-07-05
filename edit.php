@@ -94,6 +94,7 @@ $customdata = [
     'cmid'            => $cm->id,
     'confsubmissions' => $confsubmissions,
     'speakers'        => $speakers,
+    'showalldays'     => has_capability('mod/confsubmissions:manageform', $context),
 ];
 if ($submission) {
     $customdata['preferreddates'] = api::get_date_preferences($submission->id);

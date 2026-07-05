@@ -33,6 +33,11 @@ require_once($CFG->libdir . '/formslib.php');
  * - confsubmissions: stdClass, the confsubmissions instance record
  * - speakers: stdClass[], existing speaker rows when editing (empty array for new)
  *
+ * Optional custom data:
+ * - showalldays: bool, true to skip filtering out org-wide disabled preferred days
+ *   (see api::get_disabled_dates()); pass this only for a user with
+ *   mod/confsubmissions:manageform (user feedback, 2026-07-05)
+ *
  * @package    mod_confsubmissions
  * @copyright  2026 Adam Jenkins <adam@wisecat.net>
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
@@ -171,6 +176,15 @@ class submission_form extends \moodleform {
         // data from before that validation existed, or a race with another editor, could
         // still produce it) silently shows nothing rather than erroring.
         $this->conferencedays = api::get_conference_days($cs);
+        // Org-wide disabled days (user feedback, 2026-07-05) are hidden from a regular
+        // submitter's checkboxes entirely, but a caller with mod/confsubmissions:manageform
+        // (editingteacher+) passes 'showalldays' so it still sees and can select every day.
+        if (empty($this->_customdata['showalldays'])) {
+            $disableddates = api::get_disabled_dates($cs);
+            if ($disableddates) {
+                $this->conferencedays = array_values(array_diff($this->conferencedays, $disableddates));
+            }
+        }
         if (!empty($cs->offerpreferreddates) && $this->conferencedays) {
             $mform->addElement('header', 'preferreddatesheader', get_string('preferreddates', 'mod_confsubmissions'));
             $mform->setExpanded('preferreddatesheader');

@@ -626,6 +626,45 @@ class api {
     }
 
     /**
+     * Returns the conference days an instance has org-wide disabled from a regular
+     * submitter's preferred-date checkboxes (user feedback, 2026-07-05). A user with
+     * mod/confsubmissions:manageform (editingteacher+) is not subject to this list --
+     * see submission_form.php's definition(), which only filters $this->conferencedays
+     * for a caller that did not pass its 'showalldays' customdata flag.
+     *
+     * @param \stdClass $confsubmissions The confsubmissions instance record
+     * @return int[] Midnight timestamps of the disabled days
+     */
+    public static function get_disabled_dates(\stdClass $confsubmissions): array {
+        if (empty($confsubmissions->disableddates)) {
+            return [];
+        }
+
+        return array_map('intval', array_filter(explode(',', $confsubmissions->disableddates), 'strlen'));
+    }
+
+    /**
+     * Replaces an instance's org-wide disabled preferred-date days with a new set.
+     *
+     * @param int $confsubmissionsid The confsubmissions instance id
+     * @param int[] $dates Midnight timestamps of the days to disable
+     * @return void
+     */
+    public static function set_disabled_dates(int $confsubmissionsid, array $dates): void {
+        global $DB;
+
+        $dates = array_unique(array_map('intval', $dates));
+        sort($dates);
+
+        $DB->set_field(
+            'confsubmissions',
+            'disableddates',
+            $dates ? implode(',', $dates) : null,
+            ['id' => $confsubmissionsid]
+        );
+    }
+
+    /**
      * Validates a field type against the fixed allow-list (confsubmissions_field_types()
      * in lib.php).
      *
