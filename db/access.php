@@ -87,4 +87,17 @@ $capabilities = [
             'manager'        => CAP_ALLOW,
         ],
     ],
+
+    // Deliberately manager-only (user feedback, 2026-07-05: "Managers and site Admins
+    // should also be able to delete submissions (editingteacher should not have this
+    // capability)"). Site admins always bypass capability checks entirely regardless
+    // of archetype config, so they need no separate entry here.
+    'mod/confsubmissions:deleteany' => [
+        'riskbitmask'  => RISK_DATALOSS,
+        'captype'      => 'write',
+        'contextlevel' => CONTEXT_MODULE,
+        'archetypes'   => [
+            'manager' => CAP_ALLOW,
+        ],
+    ],
 ];

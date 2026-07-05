@@ -35,6 +35,9 @@ use mod_confsubmissions\api;
 $id = required_param('id', PARAM_INT);
 $filtertrack = optional_param('trackid', '', PARAM_INT);
 $filterstatus = optional_param('status', '', PARAM_ALPHA);
+$withdrawid = optional_param('withdraw', 0, PARAM_INT);
+$deleteid = optional_param('delete', 0, PARAM_INT);
+$confirm = optional_param('confirm', 0, PARAM_BOOL);
 
 [$course, $cm] = get_course_and_cm_from_cmid($id, 'confsubmissions');
 $confsubmissions = $DB->get_record('confsubmissions', ['id' => $cm->instance], '*', MUST_EXIST);
@@ -48,6 +51,7 @@ $canviewown = has_capability('mod/confsubmissions:viewown', $context);
 $cansubmit = has_capability('mod/confsubmissions:submit', $context);
 $canmanagetracks = has_capability('mod/confsubmissions:managetracks', $context);
 $canmanageform = has_capability('mod/confsubmissions:manageform', $context);
+$candeleteany = has_capability('mod/confsubmissions:deleteany', $context);
 
 if (!$canviewall && !$canviewown) {
     require_capability('mod/confsubmissions:viewall', $context);
@@ -69,7 +73,64 @@ $tracknames = [];
 foreach (api::get_tracks($cm->id) as $track) {
     $tracknames[$track->id] = format_string($track->name);
 }
-$statuses = ['submitted', 'accepted', 'rejected'];
+$statuses = ['submitted', 'accepted', 'rejected', 'withdrawn'];
+
+// Withdraw: reversible, submitter-owned (their own "my submissions" row only), a
+// status change rather than a deletion -- see api::set_status()'s docblock for why
+// this and Delete are kept as two separate, differently-gated actions.
+if ($withdrawid) {
+    require_sesskey();
+
+    $submission = api::get_submission($withdrawid);
+    if (!$submission || $submission->confsubmissions != $confsubmissions->id) {
+        throw new \moodle_exception('invalidrecord', 'error', '', 'confsubmissions_submission');
+    }
+    if ((int) $submission->userid !== (int) $USER->id) {
+        throw new \moodle_exception('error:notowner', 'mod_confsubmissions');
+    }
+    require_capability('mod/confsubmissions:submit', $context);
+
+    if (!$confirm) {
+        echo $OUTPUT->header();
+        echo $OUTPUT->confirm(
+            get_string('confirmwithdraw', 'mod_confsubmissions', format_string($submission->title)),
+            new moodle_url($pageurl, ['withdraw' => $withdrawid, 'confirm' => 1, 'sesskey' => sesskey()]),
+            $pageurl
+        );
+        echo $OUTPUT->footer();
+        exit;
+    }
+
+    api::set_status($withdrawid, 'withdrawn');
+    redirect($pageurl, get_string('submissionwithdrawn', 'mod_confsubmissions'), null, \core\output\notification::NOTIFY_SUCCESS);
+}
+
+// Delete: permanent, manager/admin-only (mod/confsubmissions:deleteany is a
+// manager-only archetype -- see db/access.php -- editingteacher deliberately
+// excluded per explicit user feedback, 2026-07-05).
+if ($deleteid) {
+    require_sesskey();
+    require_capability('mod/confsubmissions:deleteany', $context);
+
+    $submission = api::get_submission($deleteid);
+    if (!$submission || $submission->confsubmissions != $confsubmissions->id) {
+        throw new \moodle_exception('invalidrecord', 'error', '', 'confsubmissions_submission');
+    }
+
+    if (!$confirm) {
+        echo $OUTPUT->header();
+        echo $OUTPUT->confirm(
+            get_string('confirmdeletesubmission', 'mod_confsubmissions', format_string($submission->title)),
+            new moodle_url($pageurl, ['delete' => $deleteid, 'confirm' => 1, 'sesskey' => sesskey()]),
+            $pageurl
+        );
+        echo $OUTPUT->footer();
+        exit;
+    }
+
+    api::delete_submission($deleteid);
+    redirect($pageurl, get_string('submissiondeleted', 'mod_confsubmissions'), null, \core\output\notification::NOTIFY_SUCCESS);
+}
 
 echo $OUTPUT->header();
 echo $OUTPUT->heading(format_string($confsubmissions->name), 2);
@@ -140,12 +201,18 @@ if ($canviewown) {
                 : $viewurl;
             $actionlabel = $editable ? get_string('edit') : get_string('view');
 
+            $actions = [html_writer::link($actionurl, $actionlabel)];
+            if ($submission->status !== 'withdrawn') {
+                $withdrawurl = new moodle_url($pageurl, ['withdraw' => $submission->id, 'sesskey' => sesskey()]);
+                $actions[] = html_writer::link($withdrawurl, get_string('withdraw', 'mod_confsubmissions'));
+            }
+
             $table->data[] = [
                 html_writer::link($viewurl, format_string($submission->title)),
                 $submission->trackid ? ($tracknames[$submission->trackid] ?? '-') : get_string('notrack', 'mod_confsubmissions'),
                 get_string('status_' . $submission->status, 'mod_confsubmissions'),
                 userdate($submission->timemodified),
-                html_writer::link($actionurl, $actionlabel),
+                implode(' | ', $actions),
             ];
         }
 
@@ -203,6 +270,9 @@ if ($canviewall) {
             get_string('status', 'mod_confsubmissions'),
             get_string('submitted', 'mod_confsubmissions'),
         ];
+        if ($candeleteany) {
+            $table->head[] = '';
+        }
         $table->attributes['class'] = 'generaltable';
 
         foreach ($all as $submission) {
@@ -225,13 +295,19 @@ if ($canviewall) {
                 'submissionid' => $submission->id,
             ]);
 
-            $table->data[] = [
+            $row = [
                 html_writer::link($viewurl, format_string($submission->title)),
                 $primaryname,
                 $submission->trackid ? ($tracknames[$submission->trackid] ?? '-') : get_string('notrack', 'mod_confsubmissions'),
                 get_string('status_' . $submission->status, 'mod_confsubmissions'),
                 userdate($submission->timecreated),
             ];
+            if ($candeleteany) {
+                $deleteurl = new moodle_url($pageurl, ['delete' => $submission->id, 'sesskey' => sesskey()]);
+                $row[] = html_writer::link($deleteurl, get_string('delete'));
+            }
+
+            $table->data[] = $row;
         }
 
         echo html_writer::table($table);

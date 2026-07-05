@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+- User feedback (2026-07-05): "submitters should have the ability to 'Withdraw' a
+  submission. Managers and site Admins should also be able to delete submissions
+  (editingteacher should not have this capability)." Added a `withdrawn` status
+  (`api::VALID_STATUSES`) with a "Withdraw" link on a submitter's own "my
+  submissions" row (reversible-in-spirit: a status change, via the existing
+  `set_status()`, not a deletion) and a separate, genuinely destructive
+  `api::delete_submission()` (removes the submission, its speakers, and its
+  optional-field answers) gated by a new `mod/confsubmissions:deleteany`
+  capability, deliberately given only to the `manager` archetype -- site admins
+  always bypass capability checks regardless of archetype config, so no
+  explicit admin entry was needed, and `editingteacher` was deliberately left
+  out. Live-verified via Moodle's "Login as": an editingteacher-only user sees
+  no Delete link at all; a manager-only user does, and both the confirm-first
+  Withdraw and Delete flows were exercised end-to-end (including confirming the
+  DB record and its speakers are actually gone after a Delete). Known
+  limitation, documented in `RELATIONS.md`: neither `mod_confprogram` nor
+  `mod_confscheduler` currently reacts to a withdrawal in any way.
 - User feedback (2026-07-05): "the Speakers/Speaker1 sections are still a mess ...
   Speakers should be one section containing all the speaker settings ... Speaker 1,
   Speaker 2 and so on should NOT be separate sections. Speaker order should be

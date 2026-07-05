@@ -39,7 +39,7 @@ namespace mod_confsubmissions;
  */
 class api {
     /** @var string[] Valid values for confsubmissions_submission.status. */
-    public const VALID_STATUSES = ['submitted', 'accepted', 'rejected'];
+    public const VALID_STATUSES = ['submitted', 'accepted', 'rejected', 'withdrawn'];
 
     /**
      * Returns a single submission record.
@@ -83,6 +83,31 @@ class api {
             'status'       => $status,
             'timemodified' => time(),
         ]);
+    }
+
+    /**
+     * Permanently deletes a submission and everything attached to it (speakers,
+     * optional-field answers).
+     *
+     * This is a hard delete, unlike set_status(mode: 'withdrawn') -- restricted by
+     * capability (mod/confsubmissions:deleteany, manager-only by default; see
+     * db/access.php) to organisers who genuinely want the record gone, as opposed to
+     * a submitter's own reversible "Withdraw" action.
+     *
+     * Known limitation: this does not reach into mod_confprogram (any decision or
+     * review referencing this submissionid becomes orphaned -- the same
+     * no-shared-library, no-cross-plugin-cascade posture already documented in
+     * RELATIONS.md for every other cross-plugin id reference in this project).
+     *
+     * @param int $submissionid The confsubmissions_submission id
+     * @return void
+     */
+    public static function delete_submission(int $submissionid): void {
+        global $DB;
+
+        $DB->delete_records('confsubmissions_speaker', ['submissionid' => $submissionid]);
+        $DB->delete_records('confsubmissions_fieldval', ['submissionid' => $submissionid]);
+        $DB->delete_records('confsubmissions_submission', ['id' => $submissionid]);
     }
 
     /**
