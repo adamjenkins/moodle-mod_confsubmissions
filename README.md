@@ -18,6 +18,8 @@ Add a "Conference Submissions" activity to a course to open a call for abstracts
 - Fully dynamic optional fields: organisers add as many as they like, each with a freely-chosen label and a type (short text, long text, dropdown, checkbox, date, number, or web address).
 - Tracks for categorising submissions, each with an optional colour and icon (drawn from a curated, built-in set — never free text or an uploaded asset), used by downstream plugins for review assignment, scheduling, and coloured pill badges shown across the whole suite.
 - Submission types (e.g. Lightning Talk, Workshop), each with a default presentation duration in minutes, organiser-managed on their own screen. A presenter chooses their submission's type, which `mod_confscheduler` then uses as the initial length of the block when the presentation is first scheduled (still freely resizable afterwards).
+- Optional conference dates plus an "offer preferred dates" toggle: when enabled, a submitter sees one checkbox per conference day (all checked by default), which `mod_confscheduler`'s autoscheduler tries to honour when placing a presentation. Organisers can additionally disable specific days org-wide (`dates.php`) so regular submitters are never offered them — a submitter's checkbox for a disabled day still appears, but greyed out and unchecked, while an organiser (editingteacher/manager) still sees and can select every day.
+- Submitters can withdraw their own submission (a reversible status change); managers and site admins can permanently delete any submission (editingteacher deliberately cannot).
 - A stable PHP API (`classes/api.php`) other conference-tools plugins build on.
 
 ## Requirements
