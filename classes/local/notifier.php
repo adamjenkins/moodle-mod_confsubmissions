@@ -255,6 +255,25 @@ class notifier {
         $message->contexturl = (new \moodle_url('/course/view.php', ['id' => $courseid]))->out(false);
         $message->contexturlname = get_string('pluginname', 'mod_confsubmissions');
 
-        message_send($message);
+        // Message_send() can fail (e.g. the site's mail transport isn't configured, a
+        // real and common misconfiguration this plugin has no control over) via a
+        // debugging() call that some error-handler configurations convert into a
+        // thrown exception -- fatal if uncaught, as it is here, from edit.php/
+        // set_status() right before their own redirect() call. A submitter's own
+        // real action (submitting, withdrawing) must never be broken by a
+        // best-effort notification failing to send, so any failure here is caught
+        // and swallowed rather than allowed to propagate. Caught live (a real 500,
+        // not just a theoretical risk) via the sibling issue in
+        // \mod_confprogram\local\notifier::send() -- see that method's docblock.
+        // Deliberately does not call debugging() to record the failure: debugging()
+        // is the very function whose exception-conversion this catch block exists to
+        // survive, so calling it again here risks the same fatal exception all over
+        // again.
+        try {
+            message_send($message);
+        } catch (\Throwable $e) {
+            // phpcs:ignore moodle.PHP.ForbiddenFunctions.FoundWithAlternative
+            error_log('mod_confsubmissions notification send failed: ' . $e->getMessage());
+        }
     }
 }

@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- **Bug fix**, found live while building the companion decision-notification
+  feature in `mod_confprogram`: `notifier::send()`'s call to `message_send()`
+  could throw an uncaught exception (e.g. this environment's missing
+  `sendmail` binary triggers a `debugging()` call that some error-handler
+  configurations convert into a thrown exception) -- fatal from `edit.php`/
+  `api::set_status()`, both of which call `redirect()` right after and must
+  not throw/emit output first. A submitter's own real action (submitting,
+  withdrawing) must never be broken by a best-effort notification failing to
+  send, so `message_send()` is now wrapped in a try/catch. 44/44 PHPUnit
+  still passing, phpcs/moodlecheck clean.
 - User feedback (2026-07-05): "The system should generate notifications to be
   sent to ALL presenters on a presentation upon a submission being made... If a
   submission is withdrawn, a notification should be sent to editingteachers in

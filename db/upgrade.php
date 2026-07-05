@@ -288,5 +288,12 @@ function xmldb_confsubmissions_upgrade($oldversion) {
         upgrade_mod_savepoint(true, 2026070507, 'confsubmissions');
     }
 
+    if ($oldversion < 2026070508) {
+        // No schema change here: notifier::send()'s message_send() call is now
+        // wrapped in a try/catch (a failed notification send must never break the
+        // real submit/withdraw action that triggered it) -- see changelog.md.
+        upgrade_mod_savepoint(true, 2026070508, 'confsubmissions');
+    }
+
     return true;
 }
