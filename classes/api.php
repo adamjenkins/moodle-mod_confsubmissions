@@ -83,6 +83,16 @@ class api {
             'status'       => $status,
             'timemodified' => time(),
         ]);
+
+        // A "withdrawn" status is only ever set here from view.php's own
+        // user-initiated withdraw action -- mod_confprogram's decision-sync call
+        // above only ever passes "accepted"/"rejected" (VALID_STATUSES has no
+        // "waitlisted" entry; waitlist is a confprogram_decision-only concept), so
+        // this can never double-fire the withdrawal notification for an unrelated
+        // status sync.
+        if ($status === 'withdrawn') {
+            \mod_confsubmissions\local\notifier::notify_submission_withdrawn($submissionid);
+        }
     }
 
     /**

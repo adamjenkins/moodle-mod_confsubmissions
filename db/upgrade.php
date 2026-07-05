@@ -256,5 +256,37 @@ function xmldb_confsubmissions_upgrade($oldversion) {
         upgrade_mod_savepoint(true, 2026070505, 'confsubmissions');
     }
 
+    if ($oldversion < 2026070506) {
+        // No schema change here (same convention as the 2026070202 step above): this
+        // savepoint exists only to catch version.php up to the fix in commit c25a390
+        // (the disabled-preferred-days save-persistence bug and submission-form
+        // grey-out rework), which bumped $plugin->version without a matching upgrade
+        // step at the time -- caught later while adding the notifications feature.
+        upgrade_mod_savepoint(true, 2026070506, 'confsubmissions');
+    }
+
+    if ($oldversion < 2026070507) {
+        // Notifications (user request, 2026-07-05): a submission being made or
+        // withdrawn sends a notification via Moodle's own message system, with an
+        // organiser-editable template per notification type.
+        if (!$dbman->table_exists('confsubmissions_notiftemplate')) {
+            $table = new xmldb_table('confsubmissions_notiftemplate');
+            $table->add_field('id', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, XMLDB_SEQUENCE, null);
+            $table->add_field('confsubmissions', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0');
+            $table->add_field('notiftype', XMLDB_TYPE_CHAR, '20', null, XMLDB_NOTNULL, null, null);
+            $table->add_field('subject', XMLDB_TYPE_CHAR, '255', null, null, null, null);
+            $table->add_field('body', XMLDB_TYPE_TEXT, null, null, null, null, null);
+            $table->add_field('bodyformat', XMLDB_TYPE_INTEGER, '4', null, XMLDB_NOTNULL, null, '0');
+            $table->add_field('timecreated', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0');
+            $table->add_field('timemodified', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0');
+            $table->add_key('primary', XMLDB_KEY_PRIMARY, ['id']);
+            $table->add_key('confsubmissions', XMLDB_KEY_FOREIGN, ['confsubmissions'], 'confsubmissions', ['id']);
+            $table->add_index('confsubmissionstype', XMLDB_INDEX_UNIQUE, ['confsubmissions', 'notiftype']);
+            $dbman->create_table($table);
+        }
+
+        upgrade_mod_savepoint(true, 2026070507, 'confsubmissions');
+    }
+
     return true;
 }

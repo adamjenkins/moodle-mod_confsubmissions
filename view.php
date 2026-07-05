@@ -52,6 +52,7 @@ $cansubmit = has_capability('mod/confsubmissions:submit', $context);
 $canmanagetracks = has_capability('mod/confsubmissions:managetracks', $context);
 $canmanageform = has_capability('mod/confsubmissions:manageform', $context);
 $candeleteany = has_capability('mod/confsubmissions:deleteany', $context);
+$canmanagenotifications = has_capability('mod/confsubmissions:managenotifications', $context);
 
 if (!$canviewall && !$canviewown) {
     require_capability('mod/confsubmissions:viewall', $context);
@@ -152,6 +153,12 @@ if ($canmanagetracks) {
     $links[] = html_writer::link(
         new moodle_url('/mod/confsubmissions/fields.php', ['id' => $cm->id]),
         get_string('managefields', 'mod_confsubmissions')
+    );
+}
+if ($canmanagenotifications) {
+    $links[] = html_writer::link(
+        new moodle_url('/mod/confsubmissions/notifications.php', ['id' => $cm->id]),
+        get_string('managenotifications', 'mod_confsubmissions')
     );
 }
 if ($canmanageform) {

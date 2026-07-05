@@ -33,6 +33,7 @@ require_once($CFG->dirroot . '/mod/confsubmissions/lib.php');
 use mod_confsubmissions\api;
 use mod_confsubmissions\form\submission_form;
 use mod_confsubmissions\local\limits;
+use mod_confsubmissions\local\notifier;
 
 $id = required_param('id', PARAM_INT);
 $submissionid = optional_param('submissionid', 0, PARAM_INT);
@@ -170,6 +171,8 @@ if ($mform->is_cancelled()) {
         'timemodified'    => $now,
     ];
 
+    $isnewsubmission = !$submission;
+
     if ($submission) {
         $record->id = $submission->id;
         $DB->update_record('confsubmissions_submission', $record);
@@ -195,6 +198,12 @@ if ($mform->is_cancelled()) {
             $newsubmissionid,
             submission_form::extract_preferred_dates($data, $conferencedays)
         );
+    }
+
+    // Only on genuine creation, never on an edit of an existing submission -- an
+    // edit does not re-trigger the "submission made" notification.
+    if ($isnewsubmission) {
+        notifier::notify_submission_created($newsubmissionid);
     }
 
     redirect($viewurl, get_string('submissionsaved', 'mod_confsubmissions'), null, \core\output\notification::NOTIFY_SUCCESS);

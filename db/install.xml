@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" ?>
-<XMLDB PATH="mod/confsubmissions/db" VERSION="2026070505" COMMENT="XMLDB file for Moodle mod/confsubmissions"
+<XMLDB PATH="mod/confsubmissions/db" VERSION="2026070507" COMMENT="XMLDB file for Moodle mod/confsubmissions"
     xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
     xsi:noNamespaceSchemaLocation="../../../lib/xmldb/xmldb.xsd">
   <TABLES>
@@ -132,6 +132,25 @@
         <KEY NAME="submissionid" TYPE="foreign" FIELDS="submissionid" REFTABLE="confsubmissions_submission" REFFIELDS="id"/>
         <KEY NAME="submissionid-prefdate" TYPE="unique" FIELDS="submissionid, prefdate"/>
       </KEYS>
+    </TABLE>
+    <TABLE NAME="confsubmissions_notiftemplate" COMMENT="Organiser-edited notification templates (email subject/body) for this instance's own notification events">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="confsubmissions" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" DEFAULT="0" COMMENT="Foreign key to confsubmissions table"/>
+        <FIELD NAME="notiftype" TYPE="char" LENGTH="20" NOTNULL="true" SEQUENCE="false" COMMENT="One of local\notifier::NOTIF_TYPES ('created', 'withdrawn'); enforced in PHP"/>
+        <FIELD NAME="subject" TYPE="char" LENGTH="255" NOTNULL="false" SEQUENCE="false" COMMENT="Notification email subject, with embeddable placeholder fields (e.g. [[fullname]], [[submissiontitle]]); null/blank falls back to a built-in default"/>
+        <FIELD NAME="body" TYPE="text" NOTNULL="false" SEQUENCE="false" COMMENT="Notification email body, same placeholder syntax as subject; null/blank falls back to a built-in default"/>
+        <FIELD NAME="bodyformat" TYPE="int" LENGTH="4" NOTNULL="true" SEQUENCE="false" DEFAULT="0" COMMENT="Standard Moodle text-format field for the body column, same convention as this plugin's own introformat field"/>
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" DEFAULT="0"/>
+        <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" DEFAULT="0"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="confsubmissions" TYPE="foreign" FIELDS="confsubmissions" REFTABLE="confsubmissions" REFFIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="confsubmissionstype" UNIQUE="true" FIELDS="confsubmissions, notiftype" COMMENT="At most one template per notification type per instance"/>
+      </INDEXES>
     </TABLE>
   </TABLES>
 </XMLDB>

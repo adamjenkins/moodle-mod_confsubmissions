@@ -20,7 +20,14 @@ Add a "Conference Submissions" activity to a course to open a call for abstracts
 - Submission types (e.g. Lightning Talk, Workshop), each with a default presentation duration in minutes, organiser-managed on their own screen. A presenter chooses their submission's type, which `mod_confscheduler` then uses as the initial length of the block when the presentation is first scheduled (still freely resizable afterwards).
 - Optional conference dates plus an "offer preferred dates" toggle: when enabled, a submitter sees one checkbox per conference day (all checked by default), which `mod_confscheduler`'s autoscheduler tries to honour when placing a presentation. Organisers can additionally disable specific days org-wide (`dates.php`) so regular submitters are never offered them — a submitter's checkbox for a disabled day still appears, but greyed out and unchecked, while an organiser (editingteacher/manager) still sees and can select every day.
 - Submitters can withdraw their own submission (a reversible status change); managers and site admins can permanently delete any submission (editingteacher deliberately cannot).
+- Notifications, sent via Moodle's own core notification system (email on by default): every real speaker on a submission is notified when it is made; every editingteacher in the course is notified when a submission is withdrawn. Templates for each are organiser-editable (`notifications.php`).
 - A stable PHP API (`classes/api.php`) other conference-tools plugins build on.
+
+## Architecture notes
+
+- **Notification templates use a plain, fixed `[[name]]` placeholder delimiter**, not a sitewide-configurable admin setting like `mod_confcheckin`'s badge/ticket templates — those are reused PDF documents authored once and kept for the life of an instance, where a delimiter clash is a real, recurring risk; a notification template is a short, one-off email an organiser is unlikely to already have `[[ ]]`-shaped content in, so the extra admin setting wasn't judged worth its own maintenance burden here.
+- **A manually-entered co-presenter (no `userid`) is never notified** — there is no Moodle account to message. This is the same rule `mod_confcheckin\local\eligibility` already uses for presenter-ticket eligibility.
+- **`api::set_status()` only fires the withdrawal notification for the literal `'withdrawn'` status**, never for `mod_confprogram`'s own accept/reject decision-sync calls through the same method — safe because `VALID_STATUSES` has no `'waitlisted'` entry (waitlist is a `confprogram_decision`-only concept), so there's no overlap to worry about.
 
 ## Requirements
 

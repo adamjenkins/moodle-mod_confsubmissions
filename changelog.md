@@ -2,6 +2,40 @@
 
 ## Unreleased
 
+- User feedback (2026-07-05): "The system should generate notifications to be
+  sent to ALL presenters on a presentation upon a submission being made... If a
+  submission is withdrawn, a notification should be sent to editingteachers in
+  the course." Added a "submission made" notification to every real
+  (userid-backed) speaker on a new submission, and a "submission withdrawn"
+  notification to every editingteacher in the course (not the speakers) --
+  both sent via Moodle's own core notification system (`\core\message\message`
+  + `message_send()`), registered as two separate message providers
+  (`db/messages.php`: `submissioncreated`, `submissionwithdrawn`) so a user can
+  opt in/out of each independently, both defaulting the email output ON
+  alongside the popup output (this is what makes "sent by email as well by
+  default" free -- no bespoke mailer). Each notification type has its own
+  organiser-editable template (`notifications.php`, new
+  `confsubmissions_notiftemplate` table, `mod/confsubmissions:managenotifications`
+  capability), mirroring `mod_confcheckin`'s ticket-template pattern, with a
+  plain fixed `[[name]]` placeholder delimiter (not a sitewide-configurable
+  admin setting like `mod_confcheckin`'s -- these are short, one-off emails, not
+  reused PDF documents, so that extra maintenance burden wasn't judged
+  worthwhile). Left unset, both fall back to a sensible built-in default. A
+  manually-entered co-presenter with no `userid` is never notified (no Moodle
+  account exists to message); `set_status()` only fires the withdrawal
+  notification for the literal `'withdrawn'` status, never for the
+  `mod_confprogram` decision-sync calls that also pass through this same
+  method (`VALID_STATUSES` has no `'waitlisted'` entry, so there is no
+  collision risk). Caught and fixed during testing: `get_role_users()` returns
+  a trimmed-down user object, not a full record, which `message_send()`
+  otherwise silently re-fetches itself with a noisy `debugging()` notice --
+  fixed by refetching the full user record before building each message. Also
+  fixed a version/schema-sync bug found incidentally: `version.php` had been
+  bumped to `2026070506` for an earlier fix (the disabled-preferred-days
+  persistence bug) with no matching `upgrade.php` savepoint or `install.xml`
+  version bump -- added the missing no-op savepoint and brought `install.xml`
+  back in sync. 44/44 PHPUnit passing (was 39), phpcs/moodlecheck clean, EN/JA
+  lang parity verified (195/195 keys).
 - User feedback (2026-07-05): "add a setting to disable specific 'preferred days'.
   Still allow users with editingteacher to specify those days as preferred dates."
   Adds a new `disableddates` column on the `confsubmissions` table (a comma-separated

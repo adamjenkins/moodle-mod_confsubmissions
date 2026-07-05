@@ -210,6 +210,7 @@ function confsubmissions_delete_instance($id) {
     $DB->delete_records('confsubmissions_field', ['confsubmissions' => $id]);
     $DB->delete_records('confsubmissions_track', ['confsubmissions' => $id]);
     $DB->delete_records('confsubmissions_submissiontype', ['confsubmissions' => $id]);
+    $DB->delete_records('confsubmissions_notiftemplate', ['confsubmissions' => $id]);
 
     $DB->delete_records('confsubmissions', ['id' => $id]);
 

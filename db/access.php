@@ -88,6 +88,16 @@ $capabilities = [
         ],
     ],
 
+    'mod/confsubmissions:managenotifications' => [
+        'riskbitmask'  => RISK_XSS,
+        'captype'      => 'write',
+        'contextlevel' => CONTEXT_MODULE,
+        'archetypes'   => [
+            'editingteacher' => CAP_ALLOW,
+            'manager'        => CAP_ALLOW,
+        ],
+    ],
+
     // Deliberately manager-only (user feedback, 2026-07-05: "Managers and site Admins
     // should also be able to delete submissions (editingteacher should not have this
     // capability)"). Site admins always bypass capability checks entirely regardless
