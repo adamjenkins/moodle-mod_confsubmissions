@@ -116,6 +116,39 @@ class mod_confsubmissions_mod_form extends moodleform_mod {
         $mform->setDefault('abstractlimittype', 'chars');
         $mform->addHelpButton('abstractlimitgroup', 'abstractlimit', 'mod_confsubmissions');
 
+        // Conference dates: unlike mod_confscheduler's own conferencestart/conferenceend
+        // (required there -- they drive the schedule grid's day range), these are
+        // deliberately NOT required here. Their only purpose in this plugin is to define
+        // the day range "offer preferred dates" checkboxes are generated from; an
+        // organiser who doesn't want that feature has no reason to be forced to fill
+        // these in.
+        $mform->addElement(
+            'date_time_selector',
+            'conferencestart',
+            get_string('conferencestart', 'mod_confsubmissions'),
+            ['optional' => true]
+        );
+        $mform->setDefault('conferencestart', 0);
+        $mform->addHelpButton('conferencestart', 'conferencestart', 'mod_confsubmissions');
+
+        $mform->addElement(
+            'date_time_selector',
+            'conferenceend',
+            get_string('conferenceend', 'mod_confsubmissions'),
+            ['optional' => true]
+        );
+        $mform->setDefault('conferenceend', 0);
+        $mform->addHelpButton('conferenceend', 'conferenceend', 'mod_confsubmissions');
+
+        $mform->addElement(
+            'advcheckbox',
+            'offerpreferreddates',
+            get_string('offerpreferreddates', 'mod_confsubmissions'),
+            get_string('offerpreferreddates_desc', 'mod_confsubmissions')
+        );
+        $mform->setDefault('offerpreferreddates', 0);
+        $mform->addHelpButton('offerpreferreddates', 'offerpreferreddates', 'mod_confsubmissions');
+
         // Track management, submission types, and optional fields (add/remove/reorder
         // confsubmissions_track / confsubmissions_submissiontype / confsubmissions_field
         // rows) are deliberately not part of this form: they are FK'd to the instance id,
@@ -150,6 +183,17 @@ class mod_confsubmissions_mod_form extends moodleform_mod {
 
         if ((int) ($data['abstractlimit'] ?? 0) < 0) {
             $errors['abstractlimitgroup'] = get_string('error:limitnegative', 'mod_confsubmissions');
+        }
+
+        if (
+            !empty($data['conferencestart']) && !empty($data['conferenceend'])
+                && $data['conferenceend'] < $data['conferencestart']
+        ) {
+            $errors['conferenceend'] = get_string('error:conferenceendbeforestart', 'mod_confsubmissions');
+        }
+
+        if (!empty($data['offerpreferreddates']) && (empty($data['conferencestart']) || empty($data['conferenceend']))) {
+            $errors['offerpreferreddates'] = get_string('error:preferreddatesneedconferencedates', 'mod_confsubmissions');
         }
 
         return $errors;

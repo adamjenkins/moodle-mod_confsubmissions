@@ -284,6 +284,69 @@ final class api_test extends advanced_testcase {
     }
 
     /**
+     * get_conference_days() returns one local-midnight timestamp per calendar day in
+     * the confsubmissions instance's conference date range, inclusive of both
+     * endpoints, and an empty array when either date is unset.
+     */
+    public function test_get_conference_days(): void {
+        $this->resetAfterTest();
+
+        $confsubmissions = $this->create_instance();
+        $confsubmissions->conferencestart = strtotime('2026-09-03 09:00:00');
+        $confsubmissions->conferenceend = strtotime('2026-09-05 17:00:00');
+
+        $days = api::get_conference_days($confsubmissions);
+        $this->assertCount(3, $days);
+        $this->assertSame(usergetmidnight($confsubmissions->conferencestart), $days[0]);
+        $this->assertSame(usergetmidnight(strtotime('2026-09-04 09:00:00')), $days[1]);
+        $this->assertSame(usergetmidnight(strtotime('2026-09-05 09:00:00')), $days[2]);
+
+        $confsubmissions->conferencestart = 0;
+        $this->assertSame([], api::get_conference_days($confsubmissions));
+    }
+
+    /**
+     * sync_date_preferences() replaces a submission's preferred days entirely on each
+     * call, and get_date_preferences() returns them as genuine ints (not the raw
+     * strings get_records_menu() would otherwise hand back -- a real bug caught live:
+     * a strict in_array() check against these values silently failed, since a DB
+     * string '123' never strictly equals the int 123 elsewhere resolves this
+     * preference against, e.g. the submission form's checkbox defaults).
+     */
+    public function test_sync_and_get_date_preferences(): void {
+        $this->resetAfterTest();
+        global $DB;
+
+        $confsubmissions = $this->create_instance();
+        $submissionid = $DB->insert_record('confsubmissions_submission', (object) [
+            'confsubmissions' => $confsubmissions->id,
+            'userid'          => 2,
+            'title'           => 'Test submission',
+            'abstract'        => 'Abstract text',
+            'status'          => 'submitted',
+            'timecreated'     => time(),
+            'timemodified'    => time(),
+        ]);
+
+        $this->assertSame([], api::get_date_preferences($submissionid));
+
+        $day1 = strtotime('2026-09-03 00:00:00');
+        $day2 = strtotime('2026-09-04 00:00:00');
+        api::sync_date_preferences($submissionid, [$day1, $day2]);
+
+        $prefs = api::get_date_preferences($submissionid);
+        $this->assertSame([$day1, $day2], $prefs);
+        foreach ($prefs as $pref) {
+            $this->assertIsInt($pref);
+        }
+
+        // Re-syncing replaces the old set entirely, not adding to it.
+        $day3 = strtotime('2026-09-05 00:00:00');
+        api::sync_date_preferences($submissionid, [$day3]);
+        $this->assertSame([$day3], api::get_date_preferences($submissionid));
+    }
+
+    /**
      * add_field()/update_field()/delete_field() CRUD, including menu-type option
      * validation and cascading deletion of a field's own answers (Revision round 1
      * follow-up, 2026-07-04: dynamic, organiser-named/typed optional fields).

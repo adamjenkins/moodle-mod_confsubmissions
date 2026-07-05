@@ -547,6 +547,85 @@ class api {
     }
 
     /**
+     * Returns the day range a confsubmissions instance's conference dates span, as
+     * local-midnight timestamps, one per calendar day (inclusive of both endpoints).
+     *
+     * Consumed by the submission form to generate one "preferred date" checkbox per
+     * day, and by mod_confscheduler's autoscheduler to validate a submitted
+     * preference still falls within the current range.
+     *
+     * @param \stdClass $confsubmissions The confsubmissions instance record
+     * @return int[] Midnight timestamps, oldest first; empty if either date is unset
+     */
+    public static function get_conference_days(\stdClass $confsubmissions): array {
+        if (empty($confsubmissions->conferencestart) || empty($confsubmissions->conferenceend)) {
+            return [];
+        }
+
+        $days = [];
+        $current = usergetmidnight((int) $confsubmissions->conferencestart);
+        $end = (int) $confsubmissions->conferenceend;
+        // Cap iterations defensively: a organiser typo (e.g. a start/end date decades
+        // apart) should not be able to hang this in an unbounded loop.
+        for ($i = 0; $i < 366 && $current <= $end; $i++) {
+            $days[] = $current;
+            $current = usergetmidnight(strtotime('+1 day', $current));
+        }
+
+        return $days;
+    }
+
+    /**
+     * Returns a submission's preferred conference days, as local-midnight timestamps.
+     *
+     * An empty array means no preference was ever recorded for this submission --
+     * callers (e.g. mod_confscheduler's autoscheduler and unscheduled-panel filter)
+     * MUST treat that as "any day is acceptable", not "no day is acceptable" -- most
+     * submissions predate this feature, or belong to an instance that never enabled
+     * offerpreferreddates, and should not be penalised or hidden as a result.
+     *
+     * @param int $submissionid The confsubmissions_submission id
+     * @return int[] Preferred-day midnight timestamps
+     */
+    public static function get_date_preferences(int $submissionid): array {
+        global $DB;
+
+        // Get_records_menu() returns raw DB column values, which are strings even for
+        // an int column -- cast explicitly so a strict in_array()/comparison against
+        // api::get_conference_days()'s genuinely-int timestamps (e.g. in the
+        // submission form and mod_confscheduler's autoscheduler) does not silently
+        // fail (caught live: every "preferred date" checkbox rendered unchecked on
+        // reload despite having been saved correctly, because '1788390000' !==
+        // 1788390000 under strict comparison).
+        return array_map('intval', array_values($DB->get_records_menu(
+            'confsubmissions_datepref',
+            ['submissionid' => $submissionid],
+            'prefdate ASC',
+            'id, prefdate'
+        )));
+    }
+
+    /**
+     * Replaces a submission's preferred conference days with a new set.
+     *
+     * @param int $submissionid The confsubmissions_submission id
+     * @param int[] $prefdates Midnight timestamps of the days to prefer
+     * @return void
+     */
+    public static function sync_date_preferences(int $submissionid, array $prefdates): void {
+        global $DB;
+
+        $DB->delete_records('confsubmissions_datepref', ['submissionid' => $submissionid]);
+
+        foreach (array_unique(array_map('intval', $prefdates)) as $prefdate) {
+            $DB->insert_record('confsubmissions_datepref', (object) [
+                'submissionid' => $submissionid,
+                'prefdate'     => $prefdate,
+            ]);
+        }
+    }
+
+    /**
      * Validates a field type against the fixed allow-list (confsubmissions_field_types()
      * in lib.php).
      *

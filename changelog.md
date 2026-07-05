@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+- User feedback (2026-07-05): "add a setting to set conference dates (not required)
+  as well as the option to 'offer preferred dates' to submitters. If enabled, a
+  submitter should see an additional set of checkboxes for preferred dates with all
+  available dates checked by default." Adds (not required, unlike
+  mod_confscheduler's own conference dates) `conferencestart`/`conferenceend` plus
+  an `offerpreferreddates` toggle to the activity settings; when enabled, the
+  submission form shows one checkbox per day in that range (all checked by default
+  for a new submission), backed by a new `confsubmissions_datepref` table and
+  `api::get_conference_days()`/`get_date_preferences()`/`sync_date_preferences()`.
+  A real bug surfaced during this work: `get_date_preferences()`'s underlying
+  `get_records_menu()` call returns raw DB values (strings, even for an int
+  column), so a strict comparison against the genuinely-int day timestamps
+  computed elsewhere silently failed -- every checkbox rendered unchecked on
+  reload despite having saved correctly. Fixed by casting explicitly; new test
+  (`test_sync_and_get_date_preferences`) asserts the return values are real ints
+  going forward. See mod_confscheduler's own changelog for how the autoscheduler
+  and edit-mode unscheduled panel consume this data.
 - User feedback (2026-07-05): "submitters should have the ability to 'Withdraw' a
   submission. Managers and site Admins should also be able to delete submissions
   (editingteacher should not have this capability)." Added a `withdrawn` status

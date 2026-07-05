@@ -26,11 +26,14 @@ use core_privacy\local\request\writer;
 /**
  * Privacy provider for mod_confsubmissions.
  *
- * Personal data is stored in three places:
+ * Personal data is stored in four places:
  * - confsubmissions_submission: the submitter (userid), plus their title/abstract text.
  * - confsubmissions_speaker: speakers attached to a submission - either an enrolled user
  *   (userid) or a manually-typed name/email for a co-presenter without a Moodle account.
  * - confsubmissions_fieldval: the submitter's free-text answers to optional fields.
+ * - confsubmissions_datepref: the submitter's preferred conference days (only meaningful
+ *   when the instance has offerpreferreddates enabled), exported/deleted alongside the
+ *   submission's other attached data even though it holds no free text of its own.
  *
  * A user can appear in this data either as the submission owner (userid on the
  * submission itself) or as a named speaker/co-presenter (userid on a speaker row
@@ -72,6 +75,10 @@ class provider implements
             'fieldid' => 'privacy:metadata:confsubmissions_fieldval:fieldid',
             'value'   => 'privacy:metadata:confsubmissions_fieldval:value',
         ], 'privacy:metadata:confsubmissions_fieldval');
+
+        $collection->add_database_table('confsubmissions_datepref', [
+            'prefdate' => 'privacy:metadata:confsubmissions_datepref:prefdate',
+        ], 'privacy:metadata:confsubmissions_datepref');
 
         return $collection;
     }
@@ -184,6 +191,11 @@ class provider implements
                     'confsubmissions_fieldval',
                     ['submissionid' => $submission->id]
                 );
+                $prefdates = $DB->get_records(
+                    'confsubmissions_datepref',
+                    ['submissionid' => $submission->id],
+                    'prefdate ASC'
+                );
 
                 $data = (object) [
                     'title'        => $submission->title,
@@ -200,6 +212,10 @@ class provider implements
                         'fieldname' => $fieldnamesbyid[$fv->fieldid] ?? (string) $fv->fieldid,
                         'value'     => $fv->value,
                     ], array_values($fieldvals)),
+                    'preferreddates' => array_map(
+                        fn($pd) => \core_privacy\local\request\transform::date($pd->prefdate),
+                        array_values($prefdates)
+                    ),
                 ];
 
                 writer::with_context($context)->export_data(['submission_' . $submission->id], $data);
@@ -257,6 +273,7 @@ class provider implements
         if ($submissionids) {
             [$insql, $params] = $DB->get_in_or_equal($submissionids);
             $DB->delete_records_select('confsubmissions_fieldval', "submissionid $insql", $params);
+            $DB->delete_records_select('confsubmissions_datepref', "submissionid $insql", $params);
             $DB->delete_records_select('confsubmissions_speaker', "submissionid $insql", $params);
         }
 
@@ -353,6 +370,7 @@ class provider implements
         if ($ownsubmissionids) {
             [$insql, $params] = $DB->get_in_or_equal($ownsubmissionids);
             $DB->delete_records_select('confsubmissions_fieldval', "submissionid $insql", $params);
+            $DB->delete_records_select('confsubmissions_datepref', "submissionid $insql", $params);
             $DB->delete_records_select('confsubmissions_speaker', "submissionid $insql", $params);
             $DB->delete_records_select(
                 'confsubmissions_submission',

@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" ?>
-<XMLDB PATH="mod/confsubmissions/db" VERSION="2026070206" COMMENT="XMLDB file for Moodle mod/confsubmissions"
+<XMLDB PATH="mod/confsubmissions/db" VERSION="2026070504" COMMENT="XMLDB file for Moodle mod/confsubmissions"
     xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
     xsi:noNamespaceSchemaLocation="../../../lib/xmldb/xmldb.xsd">
   <TABLES>
@@ -16,6 +16,9 @@
         <FIELD NAME="titlelimittype" TYPE="char" LENGTH="10" NOTNULL="true" SEQUENCE="false" DEFAULT="chars" COMMENT="chars or words"/>
         <FIELD NAME="abstractlimit" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" DEFAULT="0" COMMENT="Maximum abstract length; 0 means unlimited"/>
         <FIELD NAME="abstractlimittype" TYPE="char" LENGTH="10" NOTNULL="true" SEQUENCE="false" DEFAULT="chars" COMMENT="chars or words"/>
+        <FIELD NAME="conferencestart" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" DEFAULT="0" COMMENT="Timestamp the conference starts; 0 means unset. Not required (unlike mod_confscheduler's own field of the same name) -- only used here to generate the day range for offerpreferreddates' checkboxes"/>
+        <FIELD NAME="conferenceend" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" DEFAULT="0" COMMENT="Timestamp the conference ends; 0 means unset"/>
+        <FIELD NAME="offerpreferreddates" TYPE="int" LENGTH="1" NOTNULL="true" SEQUENCE="false" DEFAULT="0" COMMENT="Whether the submission form offers a submitter a set of preferred-date checkboxes (one per day in the conferencestart/conferenceend range), all checked by default. Requires both conference dates to be set"/>
         <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" DEFAULT="0"/>
         <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" DEFAULT="0"/>
       </FIELDS>
@@ -115,6 +118,18 @@
         <KEY NAME="submissionid" TYPE="foreign" FIELDS="submissionid" REFTABLE="confsubmissions_submission" REFFIELDS="id"/>
         <KEY NAME="fieldid" TYPE="foreign" FIELDS="fieldid" REFTABLE="confsubmissions_field" REFFIELDS="id"/>
         <KEY NAME="submissionid-fieldid" TYPE="unique" FIELDS="submissionid, fieldid"/>
+      </KEYS>
+    </TABLE>
+    <TABLE NAME="confsubmissions_datepref" COMMENT="A submitter's preferred conference days for a submission, only meaningful when the instance has offerpreferreddates enabled. Absence of any row for a submission means no preference was ever recorded (e.g. the feature was off at submission time) -- callers must treat that as 'any day is fine', not 'no day is fine'">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="submissionid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" DEFAULT="0" COMMENT="Foreign key to confsubmissions_submission table"/>
+        <FIELD NAME="prefdate" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" DEFAULT="0" COMMENT="Timestamp of local midnight for the preferred calendar day"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="submissionid" TYPE="foreign" FIELDS="submissionid" REFTABLE="confsubmissions_submission" REFFIELDS="id"/>
+        <KEY NAME="submissionid-prefdate" TYPE="unique" FIELDS="submissionid, prefdate"/>
       </KEYS>
     </TABLE>
   </TABLES>

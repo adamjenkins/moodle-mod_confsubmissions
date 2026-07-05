@@ -90,11 +90,15 @@ if (!$callisopen) {
     exit;
 }
 
-$mform = new submission_form($pageurl, [
+$customdata = [
     'cmid'            => $cm->id,
     'confsubmissions' => $confsubmissions,
     'speakers'        => $speakers,
-]);
+];
+if ($submission) {
+    $customdata['preferreddates'] = api::get_date_preferences($submission->id);
+}
+$mform = new submission_form($pageurl, $customdata);
 
 if ($submission) {
     $fields = api::get_fields($confsubmissions->id);
@@ -132,6 +136,20 @@ if ($submission) {
         $formdata->$key = $value;
     }
 
+    // Mirrors the speaker data above: submission_form.php's own setDefault() calls in
+    // definition() are not enough on their own for an existing submission -- this
+    // set_data() call needs an explicit value for every rendered checkbox, or they all
+    // render unchecked regardless of what was actually saved.
+    $conferencedaysforedit = api::get_conference_days($confsubmissions);
+    if (!empty($confsubmissions->offerpreferreddates) && $conferencedaysforedit) {
+        $existingprefs = $customdata['preferreddates'];
+        $preferreddata = [];
+        foreach ($conferencedaysforedit as $day) {
+            $preferreddata[$day] = in_array($day, $existingprefs, true) ? 1 : 0;
+        }
+        $formdata->preferreddates = $preferreddata;
+    }
+
     $mform->set_data($formdata);
 }
 
@@ -164,6 +182,19 @@ if ($mform->is_cancelled()) {
 
     $fields = api::get_fields($confsubmissions->id);
     api::sync_optional_fields($newsubmissionid, submission_form::extract_optional_fields($data, $fields));
+
+    // Only sync when the checkboxes were actually rendered (offerpreferreddates on and
+    // a conference day range configured): otherwise this save's $data simply has no
+    // 'preferreddates' to extract, and syncing an empty set here would wipe out any
+    // preference recorded before the setting was turned off -- see
+    // submission_form::extract_preferred_dates()'s docblock.
+    $conferencedays = api::get_conference_days($confsubmissions);
+    if (!empty($confsubmissions->offerpreferreddates) && $conferencedays) {
+        api::sync_date_preferences(
+            $newsubmissionid,
+            submission_form::extract_preferred_dates($data, $conferencedays)
+        );
+    }
 
     redirect($viewurl, get_string('submissionsaved', 'mod_confsubmissions'), null, \core\output\notification::NOTIFY_SUCCESS);
 }

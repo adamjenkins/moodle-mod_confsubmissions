@@ -54,6 +54,10 @@ class submission_form extends \moodleform {
     /** @var \stdClass[] This instance's optional-field configuration rows, set by definition(). */
     protected $fields = [];
 
+    /** @var int[] Midnight timestamps for each day in the instance's conference date
+     *  range, set by definition(); empty if either conference date is unset. */
+    protected $conferencedays = [];
+
     /**
      * Defines the form fields.
      */
@@ -157,6 +161,37 @@ class submission_form extends \moodleform {
 
             if (!empty($field->required)) {
                 $mform->addRule($elname, get_string('required'), 'required', null, 'client');
+            }
+        }
+
+        // Preferred dates (user feedback, 2026-07-05): only shown when the organiser has
+        // both enabled offerpreferreddates and set a conference date range to generate
+        // the day list from -- an instance with the setting on but no dates configured
+        // yet (mod_form.php's validation() should prevent this combination, but existing
+        // data from before that validation existed, or a race with another editor, could
+        // still produce it) silently shows nothing rather than erroring.
+        $this->conferencedays = api::get_conference_days($cs);
+        if (!empty($cs->offerpreferreddates) && $this->conferencedays) {
+            $mform->addElement('header', 'preferreddatesheader', get_string('preferreddates', 'mod_confsubmissions'));
+            $mform->setExpanded('preferreddatesheader');
+            $mform->addHelpButton('preferreddatesheader', 'preferreddates', 'mod_confsubmissions');
+
+            // Null (not just an empty array) means "no saved preference to restore" --
+            // a brand new submission, where every day should default to checked; an
+            // existing submission with every day actually unchecked passes an empty
+            // array here instead, which must NOT re-check everything.
+            $existingprefs = $this->_customdata['preferreddates'] ?? null;
+
+            foreach ($this->conferencedays as $day) {
+                $elname = 'preferreddates[' . $day . ']';
+                $mform->addElement(
+                    'advcheckbox',
+                    $elname,
+                    userdate($day, get_string('strftimedate', 'langconfig'))
+                );
+                $mform->setType($elname, PARAM_BOOL);
+                $default = $existingprefs === null || in_array($day, $existingprefs, true);
+                $mform->setDefault($elname, $default ? 1 : 0);
             }
         }
 
@@ -479,6 +514,32 @@ class submission_form extends \moodleform {
         }
 
         return $speakers;
+    }
+
+    /**
+     * Extracts the submitted preferred-date checkboxes into a plain list of the
+     * checked days' midnight timestamps, for \mod_confsubmissions\api::sync_date_preferences().
+     *
+     * Returns an empty array both when every checkbox was unchecked and when the
+     * checkboxes were never rendered at all (offerpreferreddates off, or no conference
+     * days configured) -- the caller (edit.php) is responsible for only calling
+     * sync_date_preferences() when $conferencedays is non-empty, so as to not
+     * overwrite existing preference data with an empty set purely because the
+     * checkboxes weren't shown on this particular save.
+     *
+     * @param \stdClass $data The validated form data (as returned by get_data())
+     * @param int[] $conferencedays Midnight timestamps for each day in range (the
+     *        same list definition() rendered checkboxes from)
+     * @return int[] Checked days' midnight timestamps
+     */
+    public static function extract_preferred_dates(\stdClass $data, array $conferencedays): array {
+        $checked = [];
+        foreach ($conferencedays as $day) {
+            if (!empty($data->preferreddates[$day] ?? null)) {
+                $checked[] = $day;
+            }
+        }
+        return $checked;
     }
 
     /**

@@ -207,5 +207,40 @@ function xmldb_confsubmissions_upgrade($oldversion) {
         upgrade_mod_savepoint(true, 2026070206, 'confsubmissions');
     }
 
+    if ($oldversion < 2026070504) {
+        // Add organiser-configurable (not required) conference dates and an
+        // "offer preferred dates" toggle: when enabled, a submitter sees one checkbox
+        // per day in the conferencestart/conferenceend range, all checked by default,
+        // and mod_confscheduler's autoscheduler tries to honour whichever days a
+        // submitter left checked (user feedback, 2026-07-05).
+        $table = new xmldb_table('confsubmissions');
+
+        $field = new xmldb_field('conferencestart', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0', 'abstractlimittype');
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+        $field = new xmldb_field('conferenceend', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0', 'conferencestart');
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+        $field = new xmldb_field('offerpreferreddates', XMLDB_TYPE_INTEGER, '1', null, XMLDB_NOTNULL, null, '0', 'conferenceend');
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+
+        if (!$dbman->table_exists('confsubmissions_datepref')) {
+            $table = new xmldb_table('confsubmissions_datepref');
+            $table->add_field('id', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, XMLDB_SEQUENCE, null);
+            $table->add_field('submissionid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0');
+            $table->add_field('prefdate', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0');
+            $table->add_key('primary', XMLDB_KEY_PRIMARY, ['id']);
+            $table->add_key('submissionid', XMLDB_KEY_FOREIGN, ['submissionid'], 'confsubmissions_submission', ['id']);
+            $table->add_key('submissionid-prefdate', XMLDB_KEY_UNIQUE, ['submissionid', 'prefdate']);
+            $dbman->create_table($table);
+        }
+
+        upgrade_mod_savepoint(true, 2026070504, 'confsubmissions');
+    }
+
     return true;
 }
