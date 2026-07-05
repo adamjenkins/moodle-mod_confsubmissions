@@ -461,11 +461,17 @@ final class submission_form_test extends advanced_testcase {
 
     /**
      * An org-wide disabled day (api::set_disabled_dates(), user feedback, 2026-07-05)
-     * is left out of $this->conferencedays for a regular submitter, but a caller that
-     * passes the 'showalldays' customdata flag (a user with
-     * mod/confsubmissions:manageform) still sees every conference day, disabled or not.
+     * still appears in $this->conferencedays -- every submitter sees the same set of
+     * days -- but for a regular submitter its checkbox renders disabled and forced
+     * unchecked; a caller that passes the 'showalldays' customdata flag (a user with
+     * mod/confsubmissions:manageform) keeps every day, disabled or not, fully
+     * interactive. An earlier version of this feature removed a disabled day from
+     * $this->conferencedays entirely, which the user rejected live ("the day should be
+     * unchecked and greyed out, but it isn't") in favour of this visible-but-
+     * uninteractive treatment -- this test exercises the rendered HTML, not just the
+     * conferencedays list, since that is exactly what the earlier bug's symptom was.
      */
-    public function test_disabled_dates_excluded_unless_showalldays(): void {
+    public function test_disabled_dates_rendered_disabled_unless_showalldays(): void {
         $this->resetAfterTest();
 
         $course = $this->getDataGenerator()->create_course();
@@ -494,8 +500,15 @@ final class submission_form_test extends advanced_testcase {
             'confsubmissions' => $instance,
             'speakers'        => [],
         ]);
-        $regulardays = $this->conferencedays_of($regularform);
-        $this->assertSame([$day1, $day3], $regulardays);
+        $this->assertSame([$day1, $day2, $day3], $this->conferencedays_of($regularform));
+
+        $rhtml = $regularform->render();
+        $this->assertFalse($this->checkbox_disabled($rhtml, 'preferreddates', $day1));
+        $this->assertTrue($this->checkbox_checked($rhtml, 'preferreddates', $day1));
+        $this->assertTrue($this->checkbox_disabled($rhtml, 'preferreddates', $day2));
+        $this->assertFalse($this->checkbox_checked($rhtml, 'preferreddates', $day2));
+        $this->assertFalse($this->checkbox_disabled($rhtml, 'preferreddates', $day3));
+        $this->assertTrue($this->checkbox_checked($rhtml, 'preferreddates', $day3));
 
         $privilegedform = new submission_form(null, [
             'cmid'            => $cm->id,
@@ -503,8 +516,11 @@ final class submission_form_test extends advanced_testcase {
             'speakers'        => [],
             'showalldays'     => true,
         ]);
-        $privilegeddays = $this->conferencedays_of($privilegedform);
-        $this->assertSame([$day1, $day2, $day3], $privilegeddays);
+        $this->assertSame([$day1, $day2, $day3], $this->conferencedays_of($privilegedform));
+
+        $phtml = $privilegedform->render();
+        $this->assertFalse($this->checkbox_disabled($phtml, 'preferreddates', $day2));
+        $this->assertTrue($this->checkbox_checked($phtml, 'preferreddates', $day2));
     }
 
     /**
@@ -518,5 +534,39 @@ final class submission_form_test extends advanced_testcase {
         $property = new \ReflectionProperty(submission_form::class, 'conferencedays');
         $property->setAccessible(true);
         return $property->getValue($form);
+    }
+
+    /**
+     * Whether a rendered form's real checkbox input (not its advcheckbox-companion
+     * hidden 0-value input) for a bracket-named element carries the HTML 'disabled'
+     * attribute.
+     *
+     * @param string $html Rendered form HTML
+     * @param string $name The element's base name (before the bracket key)
+     * @param int $key The bracket key, e.g. a day timestamp
+     * @return bool
+     */
+    private function checkbox_disabled(string $html, string $name, int $key): bool {
+        return (bool) preg_match(
+            '@<input[^>]*type="checkbox"[^>]*name="' . preg_quote($name, '@') . '\[' . $key . '\]"[^>]*disabled[^>]*>@',
+            $html
+        );
+    }
+
+    /**
+     * Whether a rendered form's real checkbox input (not its advcheckbox-companion
+     * hidden 0-value input) for a bracket-named element carries the HTML 'checked'
+     * attribute.
+     *
+     * @param string $html Rendered form HTML
+     * @param string $name The element's base name (before the bracket key)
+     * @param int $key The bracket key, e.g. a day timestamp
+     * @return bool
+     */
+    private function checkbox_checked(string $html, string $name, int $key): bool {
+        return (bool) preg_match(
+            '@<input[^>]*type="checkbox"[^>]*name="' . preg_quote($name, '@') . '\[' . $key . '\]"[^>]*checked[^>]*>@',
+            $html
+        );
     }
 }

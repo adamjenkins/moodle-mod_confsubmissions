@@ -34,9 +34,11 @@ require_once($CFG->libdir . '/formslib.php');
  * - speakers: stdClass[], existing speaker rows when editing (empty array for new)
  *
  * Optional custom data:
- * - showalldays: bool, true to skip filtering out org-wide disabled preferred days
- *   (see api::get_disabled_dates()); pass this only for a user with
- *   mod/confsubmissions:manageform (user feedback, 2026-07-05)
+ * - showalldays: bool, true to keep every day's preferred-date checkbox fully
+ *   interactive regardless of org-wide disabled days (see api::get_disabled_dates());
+ *   pass this only for a user with mod/confsubmissions:manageform (user feedback,
+ *   2026-07-05). Without it, a disabled day's checkbox still renders (every submitter
+ *   sees the same set of days) but is shown disabled/greyed out and forced unchecked.
  *
  * @package    mod_confsubmissions
  * @copyright  2026 Adam Jenkins <adam@wisecat.net>
@@ -176,36 +178,52 @@ class submission_form extends \moodleform {
         // data from before that validation existed, or a race with another editor, could
         // still produce it) silently shows nothing rather than erroring.
         $this->conferencedays = api::get_conference_days($cs);
-        // Org-wide disabled days (user feedback, 2026-07-05) are hidden from a regular
-        // submitter's checkboxes entirely, but a caller with mod/confsubmissions:manageform
-        // (editingteacher+) passes 'showalldays' so it still sees and can select every day.
-        if (empty($this->_customdata['showalldays'])) {
-            $disableddates = api::get_disabled_dates($cs);
-            if ($disableddates) {
-                $this->conferencedays = array_values(array_diff($this->conferencedays, $disableddates));
-            }
-        }
+
+        // Org-wide disabled days (user feedback, 2026-07-05) still appear in the list
+        // -- every submitter sees the SAME set of days -- but a regular submitter's
+        // checkbox for one is rendered disabled (greyed out, forced unchecked) rather
+        // than removed from the list entirely: an earlier version of this feature
+        // hid disabled days outright, which the user rejected live ("the day should
+        // be unchecked and greyed out, but it isn't") in favour of this visible-but-
+        // uninteractive treatment. A caller with mod/confsubmissions:manageform
+        // (editingteacher+) passes 'showalldays' so every day stays fully interactive
+        // for them, disabled or not.
+        $disableddates = empty($this->_customdata['showalldays']) ? api::get_disabled_dates($cs) : [];
+
         if (!empty($cs->offerpreferreddates) && $this->conferencedays) {
             $mform->addElement('header', 'preferreddatesheader', get_string('preferreddates', 'mod_confsubmissions'));
             $mform->setExpanded('preferreddatesheader');
             $mform->addHelpButton('preferreddatesheader', 'preferreddates', 'mod_confsubmissions');
 
             // Null (not just an empty array) means "no saved preference to restore" --
-            // a brand new submission, where every day should default to checked; an
-            // existing submission with every day actually unchecked passes an empty
-            // array here instead, which must NOT re-check everything.
+            // a brand new submission, where every (non-disabled) day should default to
+            // checked; an existing submission with every day actually unchecked passes
+            // an empty array here instead, which must NOT re-check everything.
             $existingprefs = $this->_customdata['preferreddates'] ?? null;
 
             foreach ($this->conferencedays as $day) {
                 $elname = 'preferreddates[' . $day . ']';
+                $isdisableddate = in_array($day, $disableddates, true);
+
                 $mform->addElement(
                     'advcheckbox',
                     $elname,
-                    userdate($day, get_string('strftimedate', 'langconfig'))
+                    userdate($day, get_string('strftimedate', 'langconfig')),
+                    null,
+                    $isdisableddate ? ['disabled' => 'disabled', 'class' => 'text-muted'] : []
                 );
                 $mform->setType($elname, PARAM_BOOL);
-                $default = $existingprefs === null || in_array($day, $existingprefs, true);
-                $mform->setDefault($elname, $default ? 1 : 0);
+
+                // A disabled day is always forced unchecked, regardless of any saved
+                // preference from before it was disabled -- a disabled HTML checkbox is
+                // never submitted anyway (extract_preferred_dates() already treats a
+                // missing day as unchecked), so this only controls what is SHOWN.
+                if ($isdisableddate) {
+                    $mform->setDefault($elname, 0);
+                } else {
+                    $default = $existingprefs === null || in_array($day, $existingprefs, true);
+                    $mform->setDefault($elname, $default ? 1 : 0);
+                }
             }
         }
 

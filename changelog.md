@@ -8,18 +8,42 @@
   list of the same local-midnight timestamps `api::get_conference_days()` produces)
   plus `api::get_disabled_dates()`/`set_disabled_dates()`, and a new `dates.php`
   management screen (linked from the activity's own navigation, gated by the existing
-  `mod/confsubmissions:manageform` capability) with one checkbox per conference day --
-  checking a day removes it from what a regular submitter is offered as a preferred
-  date. `submission_form.php` now filters its own `$this->conferencedays` for a
-  caller that does not pass the new `showalldays` customdata flag; `edit.php` passes
-  `true` for any user with `mod/confsubmissions:manageform` (editingteacher and
-  manager), so an organiser still sees and can select every day, disabled or not,
-  exactly as requested. A submission's existing preference for a day later disabled
-  is silently dropped on its next save (the checkbox is no longer rendered, so
-  `extract_preferred_dates()` never sees it) rather than erroring -- consistent with
-  every other "preference no longer offered" edge case already documented for this
-  feature. New tests: `test_get_and_set_disabled_dates` (api_test.php) and
-  `test_disabled_dates_excluded_unless_showalldays` (submission_form_test.php).
+  `mod/confsubmissions:manageform` capability) with one checkbox per conference day.
+  On the submission form, a disabled day's checkbox still appears (every submitter
+  sees the same set of days) but is rendered disabled/greyed out and forced unchecked
+  for a regular submitter; `edit.php` passes a new `showalldays` customdata flag for
+  any user with `mod/confsubmissions:manageform` (editingteacher and manager), so an
+  organiser still sees and can select every day, disabled or not, fully interactively
+  -- exactly as requested. A submission's existing preference for a day later
+  disabled is silently dropped on its next save (a disabled HTML checkbox is never
+  submitted, so `extract_preferred_dates()` never sees it) rather than erroring --
+  consistent with every other "preference no longer offered" edge case already
+  documented for this feature. An earlier version of this change instead removed a
+  disabled day from the checkbox list entirely; the user caught this live ("the day
+  should be unchecked and greyed out, but it isn't") and it was reworked to the
+  visible-but-disabled treatment described above. Two real bugs were also caught live
+  during that same report and fixed: (1) `dates.php`'s own save page never showed a
+  previously-disabled day as checked after a reload, even though the value WAS being
+  saved correctly -- `dates_form.php` was calling `setDefault('disableddates[123]', 0)`
+  directly in `definition()`, and `HTML_QuickForm_element::_findValue()` checks a
+  literal bracket-key default before ever consulting a nested-array value supplied
+  later via `set_data()`, so that hardcoded `setDefault(0)` always won and made the
+  page look like it "didn't save" -- the same quirk already documented on
+  `submission_form.php`'s own `speakermanual` repeat option; fixed by removing the
+  `setDefault()` call entirely and relying on `dates.php`'s own `set_data()` call,
+  exactly like every other manually-restored (non-repeat) form field in this project.
+  (2) A related but separate follow-up while re-testing this: confirmed (not a bug)
+  that `submission_form.php`'s own `preferreddates[N]` elements are NOT actually
+  affected by this quirk in practice, because their `setDefault()` call in
+  `definition()` is itself computed directly from the SAME customdata `edit.php`'s
+  later `set_data()` call also uses -- so the two have always agreed and the
+  `set_data()` call there is effectively redundant, not broken; left as-is rather
+  than "fixed" since removing it would change nothing observable. New/updated tests:
+  `test_get_and_set_disabled_dates` (api_test.php),
+  `test_disabled_dates_rendered_disabled_unless_showalldays` (submission_form_test.php,
+  rewritten to assert on rendered HTML `disabled`/`checked` state rather than
+  `$this->conferencedays` membership, since that is exactly what the live bug's
+  symptom was and a list-membership assertion would not have caught it).
 - User feedback (2026-07-05): "add a setting to set conference dates (not required)
   as well as the option to 'offer preferred dates' to submitters. If enabled, a
   submitter should see an additional set of checkboxes for preferred dates with all

@@ -50,7 +50,17 @@ class dates_form extends \moodleform {
                 userdate($day, get_string('strftimedate', 'langconfig'))
             );
             $mform->setType($elname, PARAM_BOOL);
-            $mform->setDefault($elname, 0);
+            // No setDefault() here, deliberately: HTML_QuickForm_element::_findValue()
+            // checks a literal bracket-key default (e.g. setDefault('disableddates[123]', 0))
+            // BEFORE it ever looks at a nested-array value supplied later via set_data()
+            // (dates.php always calls set_data(['disableddates' => [...]]) to restore the
+            // real saved state) -- the same quirk already documented on
+            // submission_form.php's own 'speakermanual' repeat option. A setDefault() call
+            // here would permanently win, so every checkbox would render unchecked
+            // regardless of what was actually saved (caught live: the disable-dates page
+            // never showed a previously-disabled day as checked after a reload). Omitting
+            // it lets set_data()'s value apply, and PHP/HTML's natural "unchecked" cover a
+            // brand new instance dates.php has not yet called set_data() for.
         }
 
         $this->add_action_buttons(false, get_string('savechanges'));
