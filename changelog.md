@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added a Japanese (`lang/ja/confsubmissions.php`) language pack, translating every
+  string in `lang/en/confsubmissions.php` (verified live: every key present in both,
+  no extras or omissions on either side).
 - **Bug fix** (user feedback, 2026-07-05): a submission's `status` column never
   changed after creation — no code anywhere wrote `accepted`/`rejected` into it, so a
   submitter's own "my submissions" view always showed "Submitted" even long after
