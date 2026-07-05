@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- **Bug fix** (user feedback, 2026-07-05): a submission's `status` column never
+  changed after creation — no code anywhere wrote `accepted`/`rejected` into it, so a
+  submitter's own "my submissions" view always showed "Submitted" even long after
+  `mod_confprogram` recorded a decision. New `classes/api.php::set_status()` (validates
+  against a new `VALID_STATUSES` allow-list) is what `mod_confprogram` now calls — but
+  only once a decision is no longer Display-phase-embargoed, never at the moment it's
+  first recorded during Review phase, since this status is shown directly to the
+  submitter and the whole point of that embargo is to keep decisions invisible until
+  an organiser explicitly switches phase. See `mod_confprogram`'s own changelog for the
+  full fix.
 - Initial scaffold: activity settings stub, schema (submissions, speakers,
   tracks, optional fields), capabilities, full privacy provider, and a
   `classes/api.php` integration surface for downstream conference-tools

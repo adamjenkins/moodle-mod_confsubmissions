@@ -38,6 +38,9 @@ namespace mod_confsubmissions;
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class api {
+    /** @var string[] Valid values for confsubmissions_submission.status. */
+    public const VALID_STATUSES = ['submitted', 'accepted', 'rejected'];
+
     /**
      * Returns a single submission record.
      *
@@ -48,6 +51,38 @@ class api {
         global $DB;
 
         return $DB->get_record('confsubmissions_submission', ['id' => $id]);
+    }
+
+    /**
+     * Sets a submission's workflow status. Called by mod_confprogram to keep this
+     * plugin's own status column in sync with Accept/Reject decisions -- see that
+     * plugin's classes/api.php::record_decision() docblock for why this is only ever
+     * called once a decision is no longer Display-phase-embargoed, never at the
+     * moment a decision is first recorded during Review phase (a submitter's own "my
+     * submissions" view shows this status directly, so syncing it early would leak an
+     * embargoed decision).
+     *
+     * @param int $submissionid The confsubmissions_submission id
+     * @param string $status One of VALID_STATUSES
+     * @return void
+     * @throws \invalid_parameter_exception if $status is not one of VALID_STATUSES
+     */
+    public static function set_status(int $submissionid, string $status): void {
+        global $DB;
+
+        if (!in_array($status, self::VALID_STATUSES, true)) {
+            throw new \invalid_parameter_exception(get_string('error:invalidstatus', 'mod_confsubmissions'));
+        }
+
+        // Use update_record(), not set_field(): a status change is a genuine modification
+        // a submitter should see reflected in their own "my submissions" list (which
+        // shows timemodified), not a silent backend touch -- caught by a
+        // moodle-reviewer pass.
+        $DB->update_record('confsubmissions_submission', (object) [
+            'id'           => $submissionid,
+            'status'       => $status,
+            'timemodified' => time(),
+        ]);
     }
 
     /**

@@ -57,6 +57,7 @@ $string['error:invalidfieldoptions'] = 'A dropdown field needs at least one choi
 $string['error:invalidfieldtype'] = 'That is not a recognised field type.';
 $string['error:invalidfieldurl'] = 'Please enter a valid web address (e.g. https://example.com).';
 $string['error:invalidicon'] = 'That icon is not one of the available choices.';
+$string['error:invalidstatus'] = 'That is not a recognised submission status.';
 $string['error:invalidsubmissiontype'] = 'Please choose a submission type.';
 $string['error:invalidtrack'] = 'That track is not available for this activity.';
 $string['error:limitnegative'] = 'The limit cannot be negative.';
