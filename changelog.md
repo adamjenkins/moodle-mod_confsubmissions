@@ -2,6 +2,28 @@
 
 ## Unreleased
 
+- User feedback (2026-07-05): "the Speakers/Speaker1 sections are still a mess ...
+  Speakers should be one section containing all the speaker settings ... Speaker 1,
+  Speaker 2 and so on should NOT be separate sections. Speaker order should be
+  settable by drag and drop." The submission form's repeating speaker rows no longer
+  each get their own collapsible formslib 'header' (which is what made every
+  "Speaker N" its own section, leaving the outer "Speakers" section looking empty);
+  a new `amd/src/speaker_order.js` re-parents each row's already-rendered fields into
+  one card per speaker, all inside the single "Speakers" section, and drives
+  `core/sortable_list` for drag-and-drop reordering of co-presenters (the primary
+  presenter, row 0, stays pinned first and non-draggable, unchanged from before). The
+  previously-visible "Display order" dropdown is now a hidden field the drag handler
+  writes to directly.
+
+  Investigating this also surfaced a real, separate bug: adding two or more
+  co-presenter rows showed the *same* phantom "Admin User" (or, after a second
+  page reload, a literal "0") pre-selected on every new row, even though none had
+  actually been chosen. Root cause: the autocomplete's seed-options array had no
+  entry representing "nothing selected" for a fresh row, so the underlying
+  `<select>`'s native default-to-first-option behaviour (and, once `PARAM_INT`
+  round-tripped a blank submission to a literal `0`, the widget's raw-value
+  fallback display) both surfaced a value nobody chose. Fixed by seeding the
+  options array with an explicit `0 => ''` entry.
 - Added a Japanese (`lang/ja/confsubmissions.php`) language pack, translating every
   string in `lang/en/confsubmissions.php` (verified live: every key present in both,
   no extras or omissions on either side).

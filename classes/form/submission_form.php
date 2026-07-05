@@ -160,9 +160,14 @@ class submission_form extends \moodleform {
             }
         }
 
-        // Speakers: a repeating group. Row 0 is the primary presenter (defaults to the
-        // current user) and is not removable; subsequent rows are co-presenters and can
-        // be added/removed freely.
+        // Speakers: a repeating group, presented as one "Speakers" section (not one
+        // collapsible sub-section per speaker -- user feedback, 2026-07-05: the old
+        // per-row 'header' element made every "Speaker N" its own formslib fieldset,
+        // leaving the outer "Speakers" section looking empty). Row 0 is the primary
+        // presenter (defaults to the current user) and is not removable or reorderable;
+        // subsequent rows are co-presenters, addable/removable freely and reorderable
+        // by drag-and-drop (amd/src/speaker_order.js re-parents each row's fields into
+        // one card and drives core/sortable_list; see that module's docblock).
         $mform->addElement('header', 'speakersheader', get_string('speakers', 'mod_confsubmissions'));
         $mform->setExpanded('speakersheader');
 
@@ -181,7 +186,29 @@ class submission_form extends \moodleform {
         // instead of a name. Seed it with every userid this row-set could pre-select:
         // the current user (the row 0 default on a new submission) and every existing
         // speaker's userid (when editing).
-        $useroptions = [(int) $USER->id => fullname($USER)];
+        //
+        // The blank 0 => '' entry is deliberate and must stay first, and its key must
+        // be the int 0 (not ''): 'speakeruserid' is PARAM_INT, so an unselected row
+        // (submitted as '') round-trips through every subsequent reload as a genuine
+        // 0, not a blank string. With no options entry for that value, the
+        // autocomplete element falls back to rendering the raw stored value instead
+        // of a name -- exactly the failure mode this array's own choices are meant to
+        // avoid (see above) -- showing a phantom "0" pill (caught live: a co-presenter
+        // row survives one page reload showing nothing selected, as expected, but
+        // shows a literal "0" pill after a second reload, once its own blank value has
+        // round-tripped through PARAM_INT once). Giving 0 a real (empty-label) entry
+        // means every reload correctly resolves it back to "nothing selected" instead.
+        //
+        // Without this blank option at all, a fresh co-presenter row added via "Add
+        // another speaker" has no explicit selected value, so the underlying <select>
+        // falls back to native HTML behaviour (no option marked 'selected' means the
+        // FIRST option is the element's current value); with the current user first
+        // in this array, core/form/autocomplete read that as "already selected" and
+        // rendered a phantom pre-filled pill on every new row, showing the same user
+        // for every co-presenter (caught live: adding two co-presenter rows showed
+        // "Admin User" selected on both, when neither had actually been chosen).
+        $useroptions = [0 => ''];
+        $useroptions[(int) $USER->id] = fullname($USER);
         foreach ($speakers as $speaker) {
             if (!empty($speaker->userid) && !isset($useroptions[(int) $speaker->userid])) {
                 $speakeruser = \core_user::get_user($speaker->userid);
@@ -191,13 +218,7 @@ class submission_form extends \moodleform {
             }
         }
 
-        $positionoptions = [];
-        for ($n = 1; $n <= self::MAX_SPEAKERS; $n++) {
-            $positionoptions[$n] = $n;
-        }
-
         $repeatarray = [
-            $mform->createElement('header', 'speakerno', get_string('speakerno', 'mod_confsubmissions', '{no}')),
             $mform->createElement(
                 'autocomplete',
                 'speakeruserid',
@@ -213,12 +234,9 @@ class submission_form extends \moodleform {
             ),
             $mform->createElement('text', 'speakername', get_string('speakername', 'mod_confsubmissions')),
             $mform->createElement('text', 'speakeremail', get_string('speakeremail', 'mod_confsubmissions')),
-            $mform->createElement(
-                'select',
-                'speakerposition',
-                get_string('speakerposition', 'mod_confsubmissions'),
-                $positionoptions
-            ),
+            // Hidden, not a visible "Display order" dropdown: order is set by dragging
+            // (amd/src/speaker_order.js writes the new value here after every drop).
+            $mform->createElement('hidden', 'speakerposition'),
             $mform->createElement(
                 'submit',
                 'speakerdelete',
@@ -265,13 +283,6 @@ class submission_form extends \moodleform {
             $mform->hideIf('speakername[' . $i . ']', 'speakermanual[' . $i . ']', 'notchecked');
             $mform->hideIf('speakeremail[' . $i . ']', 'speakermanual[' . $i . ']', 'notchecked');
             $mform->hideIf('speakeruserid[' . $i . ']', 'speakermanual[' . $i . ']', 'checked');
-
-            // Each repeated "Speaker N" header is its own collapsible section. formslib
-            // collapses every header past the first two by default (see formslib.php's
-            // accept_set_nonvisible_elements()), which otherwise leaves every speaker row's
-            // actual fields (the autocomplete/checkbox/name/email inputs) hidden behind a
-            // collapsed toggle with nothing visibly rendered beneath the "Speakers" heading.
-            $mform->setExpanded('speakerno[' . $i . ']', true);
         }
 
         if (empty($speakers)) {

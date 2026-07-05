@@ -184,6 +184,13 @@ foreach ($countedfields as $fieldname => $conf) {
     }
 }
 
+$PAGE->requires->js_call_amd('mod_confsubmissions/speaker_order', 'init', [
+    get_string('speakerno', 'mod_confsubmissions', '{no}'),
+    get_string('primaryspeaker', 'mod_confsubmissions'),
+    get_string('speakerposition', 'mod_confsubmissions'),
+    get_string('removespeaker', 'mod_confsubmissions', '{no}'),
+]);
+
 $mform->display();
 
 echo $OUTPUT->footer();
