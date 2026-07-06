@@ -49,6 +49,13 @@ class notiftemplate_form extends \moodleform {
         $mform->addElement('hidden', 'notiftype', $notiftype);
         $mform->setType('notiftype', PARAM_ALPHA);
 
+        // Instance-level master switch (user request, 2026-07-06): saved to the
+        // confsubmissions table itself, not the per-type notiftemplate row, so it
+        // applies regardless of which notification type's tab this form was
+        // submitted from -- see notifications.php.
+        $mform->addElement('advcheckbox', 'notificationsenabled', get_string('notificationsenabled', 'mod_confsubmissions'));
+        $mform->addHelpButton('notificationsenabled', 'notificationsenabled', 'mod_confsubmissions');
+
         $mform->addElement('text', 'subject', get_string('notifsubject', 'mod_confsubmissions'), ['size' => 64]);
         $mform->setType('subject', PARAM_TEXT);
         $mform->addHelpButton('subject', 'notifsubject', 'mod_confsubmissions');

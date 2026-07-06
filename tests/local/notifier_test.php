@@ -143,6 +143,43 @@ final class notifier_test extends advanced_testcase {
     }
 
     /**
+     * When an instance's notificationsenabled master switch (user request,
+     * 2026-07-06) is off, neither the submission-created nor the
+     * submission-withdrawn notification is ever sent, regardless of per-type
+     * template configuration.
+     */
+    public function test_master_switch_disables_all_notifications(): void {
+        $this->resetAfterTest();
+        global $DB;
+
+        $course = $this->getDataGenerator()->create_course();
+        $confsubmissions = $this->getDataGenerator()->create_module('confsubmissions', ['course' => $course->id]);
+        $DB->set_field('confsubmissions', 'notificationsenabled', 0, ['id' => $confsubmissions->id]);
+
+        $speaker = $this->getDataGenerator()->create_user();
+        $teacher = $this->getDataGenerator()->create_user();
+        $this->getDataGenerator()->enrol_user($teacher->id, $course->id, 'editingteacher');
+
+        $submissionid = (int) $DB->insert_record('confsubmissions_submission', (object) [
+            'confsubmissions' => $confsubmissions->id,
+            'userid'          => $speaker->id,
+            'title'           => 'Silenced Talk',
+            'abstract'        => 'An abstract.',
+            'status'          => 'submitted',
+            'timecreated'     => time(),
+            'timemodified'    => time(),
+        ]);
+        api::sync_speakers($submissionid, [['userid' => $speaker->id]]);
+
+        $sink = $this->redirectMessages();
+        notifier::notify_submission_created($submissionid);
+        api::set_status($submissionid, 'withdrawn');
+
+        $this->assertCount(0, $sink->get_messages_by_component_and_type('mod_confsubmissions', 'submissioncreated'));
+        $this->assertCount(0, $sink->get_messages_by_component_and_type('mod_confsubmissions', 'submissionwithdrawn'));
+    }
+
+    /**
      * get_template() falls back to default_template() when no
      * confsubmissions_notiftemplate row exists, and uses the configured row once one
      * does.

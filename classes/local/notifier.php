@@ -125,7 +125,7 @@ class notifier {
 
         global $DB;
         $confsubmissions = $DB->get_record('confsubmissions', ['id' => $submission->confsubmissions]);
-        if (!$confsubmissions) {
+        if (!$confsubmissions || !$confsubmissions->notificationsenabled) {
             return;
         }
 
@@ -174,7 +174,7 @@ class notifier {
 
         global $DB;
         $confsubmissions = $DB->get_record('confsubmissions', ['id' => $submission->confsubmissions]);
-        if (!$confsubmissions) {
+        if (!$confsubmissions || !$confsubmissions->notificationsenabled) {
             return;
         }
 

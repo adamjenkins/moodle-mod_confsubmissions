@@ -28,6 +28,7 @@ Add a "Conference Submissions" activity to a course to open a call for abstracts
 - **Notification templates use a plain, fixed `[[name]]` placeholder delimiter**, not a sitewide-configurable admin setting like `mod_confcheckin`'s badge/ticket templates — those are reused PDF documents authored once and kept for the life of an instance, where a delimiter clash is a real, recurring risk; a notification template is a short, one-off email an organiser is unlikely to already have `[[ ]]`-shaped content in, so the extra admin setting wasn't judged worth its own maintenance burden here.
 - **A manually-entered co-presenter (no `userid`) is never notified** — there is no Moodle account to message. This is the same rule `mod_confcheckin\local\eligibility` already uses for presenter-ticket eligibility.
 - **`api::set_status()` only fires the withdrawal notification for the literal `'withdrawn'` status**, never for `mod_confprogram`'s own accept/reject decision-sync calls through the same method — safe because `VALID_STATUSES` has no `'waitlisted'` entry (waitlist is a `confprogram_decision`-only concept), so there's no overlap to worry about.
+- **A per-instance notifications master switch** (`confsubmissions.notificationsenabled`, default on) overrides every per-type template: when off, `notifier` sends nothing at all for that instance, regardless of what's configured on notifications.php. Editable as a checkbox on that same screen.
 
 ## Requirements
 
