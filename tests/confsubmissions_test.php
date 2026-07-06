@@ -82,7 +82,48 @@ final class confsubmissions_test extends advanced_testcase {
         require_once($CFG->dirroot . '/mod/confsubmissions/lib.php');
 
         $this->assertTrue(confsubmissions_supports(FEATURE_MOD_INTRO));
-        $this->assertFalse(confsubmissions_supports(FEATURE_BACKUP_MOODLE2));
+        $this->assertTrue(confsubmissions_supports(FEATURE_BACKUP_MOODLE2));
         $this->assertNull(confsubmissions_supports('some_unknown_feature'));
+    }
+
+    /**
+     * confsubmissions_reset_userdata() deletes every submission (and everything
+     * attached to one) for instances in the given course, when reset_confsubmissions_submissions
+     * is set, but leaves instance configuration (tracks) untouched.
+     */
+    public function test_reset_userdata_removes_submissions_but_keeps_tracks(): void {
+        $this->resetAfterTest();
+        global $CFG, $DB;
+        require_once($CFG->dirroot . '/mod/confsubmissions/lib.php');
+
+        $course = $this->getDataGenerator()->create_course();
+        $confsubmissions = $this->getDataGenerator()->create_module('confsubmissions', ['course' => $course->id]);
+
+        $trackid = \mod_confsubmissions\api::add_track((int) $confsubmissions->id, 'Security');
+
+        $speaker = $this->getDataGenerator()->create_user();
+        $now = time();
+        $submissionid = (int) $DB->insert_record('confsubmissions_submission', (object) [
+            'confsubmissions' => $confsubmissions->id,
+            'userid'          => $speaker->id,
+            'title'           => 'A Test Talk',
+            'abstract'        => 'Abstract text',
+            'trackid'         => $trackid,
+            'status'          => 'submitted',
+            'timecreated'     => $now,
+            'timemodified'    => $now,
+        ]);
+        \mod_confsubmissions\api::sync_speakers($submissionid, [['userid' => $speaker->id]]);
+
+        $status = confsubmissions_reset_userdata((object) [
+            'courseid' => $course->id,
+            'reset_confsubmissions_submissions' => 1,
+            'timeshift' => 0,
+        ]);
+
+        $this->assertNotEmpty($status);
+        $this->assertFalse($DB->record_exists('confsubmissions_submission', ['id' => $submissionid]));
+        $this->assertFalse($DB->record_exists('confsubmissions_speaker', ['submissionid' => $submissionid]));
+        $this->assertTrue($DB->record_exists('confsubmissions_track', ['id' => $trackid]));
     }
 }

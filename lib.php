@@ -25,11 +25,6 @@
 /**
  * Returns the features this module supports.
  *
- * FEATURE_BACKUP_MOODLE2 is deliberately not claimed yet: no backup/restore
- * steps have been written for this plugin's tables. Claiming it without the
- * corresponding backup/moodle2/*.class.php files would cause course backups
- * to fail. Add the backup/restore steplibs before flipping this to true.
- *
  * @param string $feature FEATURE_xx constant for requested feature
  * @return mixed True if module supports feature, false if not, null if doesn't know
  */
@@ -37,7 +32,7 @@ function confsubmissions_supports($feature) {
     return match ($feature) {
         FEATURE_MOD_INTRO        => true,
         FEATURE_SHOW_DESCRIPTION => true,
-        FEATURE_BACKUP_MOODLE2   => false, // TODO: implement backup/restore steps, then set true.
+        FEATURE_BACKUP_MOODLE2   => true,
         FEATURE_GRADE_HAS_GRADE  => false,
         FEATURE_MOD_PURPOSE      => MOD_PURPOSE_ASSESSMENT,
         default                  => null,
@@ -215,6 +210,104 @@ function confsubmissions_delete_instance($id) {
     $DB->delete_records('confsubmissions', ['id' => $id]);
 
     return true;
+}
+
+/**
+ * Adds the confsubmissions-specific elements to the course reset form.
+ *
+ * @param MoodleQuickForm $mform The course reset form
+ * @return void
+ */
+function confsubmissions_reset_course_form_definition(&$mform) {
+    $mform->addElement('header', 'confsubmissionsheader', get_string('modulenameplural', 'confsubmissions'));
+    $mform->addElement('advcheckbox', 'reset_confsubmissions_submissions', get_string('removesubmissions', 'confsubmissions'));
+}
+
+/**
+ * Course reset form defaults.
+ *
+ * @param stdClass $course The course object
+ * @return array
+ */
+function confsubmissions_reset_course_form_defaults($course) {
+    return ['reset_confsubmissions_submissions' => 1];
+}
+
+/**
+ * Removes every submission (and everything attached to one: speakers, optional-field
+ * answers, date preferences) for every confsubmissions instance in a course, when a
+ * teacher resets the course for reuse. Instance CONFIGURATION -- tracks, submission
+ * types, optional fields, notification templates -- is deliberately left untouched,
+ * matching the same "config survives a reset, user data doesn't" convention every core
+ * activity module follows (e.g. mod_choice's options vs. its answers).
+ *
+ * Known limitation, documented rather than solved here: if an organiser resets ONLY
+ * this activity (not the linked mod_confprogram/mod_confscheduler instances too), any
+ * confprogram_decision/confprogram_favourite/confscheduler_slot row still referencing a
+ * submissionid deleted here becomes an orphaned reference in that sibling plugin. This
+ * does not corrupt anything (those tables have no real DB foreign key to enforce, and
+ * every read path already tolerates a missing submission gracefully -- see
+ * mod_confsubmissions\api::get_submission()'s null-return contract), but is worth
+ * knowing: resetting the whole conference course normally means resetting all four
+ * activities together anyway, which leaves nothing orphaned.
+ *
+ * @param stdClass $data The data submitted from the reset course form
+ * @return array status array
+ */
+function confsubmissions_reset_userdata($data) {
+    global $DB;
+
+    $componentstr = get_string('modulenameplural', 'confsubmissions');
+    $status = [];
+
+    if (!empty($data->reset_confsubmissions_submissions)) {
+        $confsubmissionsids = $DB->get_fieldset_select('confsubmissions', 'id', 'course = ?', [$data->courseid]);
+
+        if ($confsubmissionsids) {
+            [$insql, $params] = $DB->get_in_or_equal($confsubmissionsids);
+            $submissionids = $DB->get_fieldset_select(
+                'confsubmissions_submission',
+                'id',
+                "confsubmissions $insql",
+                $params
+            );
+
+            if ($submissionids) {
+                [$subinsql, $subparams] = $DB->get_in_or_equal($submissionids);
+                $DB->delete_records_select('confsubmissions_speaker', "submissionid $subinsql", $subparams);
+                $DB->delete_records_select('confsubmissions_fieldval', "submissionid $subinsql", $subparams);
+                $DB->delete_records_select('confsubmissions_datepref', "submissionid $subinsql", $subparams);
+            }
+
+            $DB->delete_records_select('confsubmissions_submission', "confsubmissions $insql", $params);
+        }
+
+        $status[] = [
+            'component' => $componentstr,
+            'item' => get_string('removesubmissions', 'confsubmissions'),
+            'error' => false,
+        ];
+    }
+
+    if (!empty($data->timeshift)) {
+        // Any changes to the list of dates that needs to be rolled should be the same
+        // during course restore and course reset (see MDL-9367, and
+        // restore_confsubmissions_activity_structure_step::process_confsubmissions()'s
+        // identical apply_date_offset() treatment of the same four columns).
+        shift_course_mod_dates(
+            'confsubmissions',
+            ['timeopen', 'timeclose', 'conferencestart', 'conferenceend'],
+            $data->timeshift,
+            $data->courseid
+        );
+        $status[] = [
+            'component' => $componentstr,
+            'item' => get_string('date'),
+            'error' => false,
+        ];
+    }
+
+    return $status;
 }
 
 /**

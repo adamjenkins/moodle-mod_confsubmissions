@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+- User request (2026-07-06): "Also make sure backup/restore/reset all works fine
+  with all plugins." `FEATURE_BACKUP_MOODLE2` flipped to true; new
+  `backup/moodle2/*.php` step classes cover every table (tracks, submission
+  types, optional fields, notification templates as instance configuration --
+  included regardless of the "include user info" setting; submissions, speakers,
+  optional-field answers, and date preferences as user data). Defines the
+  `confsubmissions_submission` id mapping `mod_confprogram`/`mod_confscheduler`
+  depend on for their own restore steps. New `confsubmissions_reset_userdata()`/
+  `_reset_course_form_definition()`/`_defaults()` in `lib.php`: course reset
+  deletes all submissions (and everything attached to one) but leaves tracks/
+  types/fields/templates untouched, matching the "config survives a reset, user
+  data doesn't" convention every core activity module follows. Verified with a
+  real `backup_controller`/`restore_controller` cycle (`tests/backup/
+  restore_confsubmissions_test.php`), not just a unit test of the stepslib
+  classes -- confirms same-plugin foreign keys (trackid, submissiontypeid,
+  fieldid) correctly remap to the restored copy's own new ids. 48/48 PHPUnit
+  passing (was 45, +3 new -- 2 backup/restore, 1 reset), phpcs/moodlecheck
+  clean, EN/JA lang parity verified (198/198 keys).
 - moodle-reviewer finding (2026-07-06): `notifier::notify_submission_created()`/
   `notify_submission_withdrawn()` interpolated a recipient's `fullname()` value
   unescaped into an HTML-format notification body, while the sibling

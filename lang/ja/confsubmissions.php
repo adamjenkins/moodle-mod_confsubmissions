@@ -158,6 +158,7 @@ $string['privacy:metadata:confsubmissions_submission:timemodified'] = '応募が
 $string['privacy:metadata:confsubmissions_submission:title'] = '応募のタイトル。';
 $string['privacy:metadata:confsubmissions_submission:userid'] = 'アブストラクトを応募したユーザーのID。';
 $string['removespeaker'] = '発表者{$a}を削除';
+$string['removesubmissions'] = 'すべての投稿を削除';
 $string['selectuser'] = 'ユーザーを選択';
 $string['speakeremail'] = 'メールアドレス';
 $string['speakername'] = '氏名';

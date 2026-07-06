@@ -158,6 +158,7 @@ $string['privacy:metadata:confsubmissions_submission:timemodified'] = 'The time 
 $string['privacy:metadata:confsubmissions_submission:title'] = 'The title of the submission.';
 $string['privacy:metadata:confsubmissions_submission:userid'] = 'The ID of the user who submitted the abstract.';
 $string['removespeaker'] = 'Remove speaker {$a}';
+$string['removesubmissions'] = 'Delete all submissions';
 $string['selectuser'] = 'Select user';
 $string['speakeremail'] = 'Email';
 $string['speakername'] = 'Name';
