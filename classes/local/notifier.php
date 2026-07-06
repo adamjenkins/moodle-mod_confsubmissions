@@ -142,7 +142,7 @@ class notifier {
             }
 
             $context = [
-                'fullname'        => fullname($touser),
+                'fullname'        => format_string(fullname($touser)),
                 'submissiontitle' => format_string($submission->title),
                 'coursename'      => format_string($course->fullname),
             ];
@@ -184,7 +184,7 @@ class notifier {
 
         $context = [
             'submissiontitle'   => format_string($submission->title),
-            'submitterfullname' => $submitter ? fullname($submitter) : '',
+            'submitterfullname' => $submitter ? format_string(fullname($submitter)) : '',
             'coursename'        => format_string($course->fullname),
         ];
 
