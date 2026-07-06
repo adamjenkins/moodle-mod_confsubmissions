@@ -76,7 +76,11 @@ final class notifier_test extends advanced_testcase {
         $this->assertCount(1, $messages);
         $message = reset($messages);
         $this->assertSame((int) $speaker->id, (int) $message->useridto);
-        $this->assertStringContainsString('My Great Talk', $message->fullmessage);
+        // fullmessage is html_to_text()'s word-wrapped plaintext fallback -- its wrap
+        // column depends on the length of the preceding "Hello <fullname>," text, which
+        // varies with the generator's randomly-assigned user name, so a wrap can land
+        // inside the asserted phrase. fullmessagehtml is the actual unwrapped body.
+        $this->assertStringContainsString('My Great Talk', $message->fullmessagehtml);
     }
 
     /**
@@ -111,7 +115,10 @@ final class notifier_test extends advanced_testcase {
         $this->assertCount(1, $messages);
         $message = reset($messages);
         $this->assertSame((int) $teacher->id, (int) $message->useridto);
-        $this->assertStringContainsString('Withdrawn Talk', $message->fullmessage);
+        // See the comment in the previous test: fullmessage is word-wrapped plaintext
+        // whose wrap column shifts with the generator's random user names, so assert
+        // against the unwrapped fullmessagehtml instead.
+        $this->assertStringContainsString('Withdrawn Talk', $message->fullmessagehtml);
     }
 
     /**
