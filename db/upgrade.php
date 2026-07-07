@@ -309,5 +309,13 @@ function xmldb_confsubmissions_upgrade($oldversion) {
         upgrade_mod_savepoint(true, 2026070601, 'confsubmissions');
     }
 
+    if ($oldversion < 2026070700) {
+        // New capability (user request, 2026-07-07): 'mod/confsubmissions:editany'
+        // allows editingteacher + manager roles to edit any submission. The capability
+        // is automatically loaded from db/access.php during upgrade; this savepoint
+        // just marks the upgrade complete.
+        upgrade_mod_savepoint(true, 2026070700, 'confsubmissions');
+    }
+
     return true;
 }

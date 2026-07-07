@@ -110,4 +110,18 @@ $capabilities = [
             'manager' => CAP_ALLOW,
         ],
     ],
+
+    // New capability (user request, 2026-07-07): "editing teachers should also be
+    // able to edit any submission... from the list view". Deliberately distinct from
+    // deleteany (manager-only per 2026-07-05 feedback): editing is judged lower-risk
+    // than permanent deletion, so editingteacher is included here.
+    'mod/confsubmissions:editany' => [
+        'riskbitmask'  => RISK_DATALOSS,
+        'captype'      => 'write',
+        'contextlevel' => CONTEXT_MODULE,
+        'archetypes'   => [
+            'editingteacher' => CAP_ALLOW,
+            'manager'        => CAP_ALLOW,
+        ],
+    ],
 ];

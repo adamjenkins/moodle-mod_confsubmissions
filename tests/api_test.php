@@ -92,6 +92,48 @@ final class api_test extends advanced_testcase {
     }
 
     /**
+     * can_edit_submission() allows the owner (with submit) or any editany holder,
+     * and refuses everyone else -- including a plain (non-editing) teacher, since
+     * editany is deliberately not granted to that archetype (user request, 2026-07-07).
+     */
+    public function test_can_edit_submission_owner_or_editany(): void {
+        $this->resetAfterTest();
+        global $DB;
+
+        $confsubmissions = $this->create_instance();
+        $cm = get_coursemodule_from_instance('confsubmissions', $confsubmissions->id);
+        $context = \context_module::instance($cm->id);
+
+        $owner = $this->getDataGenerator()->create_user();
+        $this->getDataGenerator()->enrol_user($owner->id, $confsubmissions->course, 'student');
+
+        $editingteacher = $this->getDataGenerator()->create_user();
+        $this->getDataGenerator()->enrol_user($editingteacher->id, $confsubmissions->course, 'editingteacher');
+
+        $plainteacher = $this->getDataGenerator()->create_user();
+        $this->getDataGenerator()->enrol_user($plainteacher->id, $confsubmissions->course, 'teacher');
+
+        $otherstudent = $this->getDataGenerator()->create_user();
+        $this->getDataGenerator()->enrol_user($otherstudent->id, $confsubmissions->course, 'student');
+
+        $submissionid = $DB->insert_record('confsubmissions_submission', (object) [
+            'confsubmissions' => $confsubmissions->id,
+            'userid'          => $owner->id,
+            'title'           => 'Test submission',
+            'abstract'        => 'Abstract text',
+            'status'          => 'submitted',
+            'timecreated'     => time(),
+            'timemodified'    => time(),
+        ]);
+        $submission = api::get_submission($submissionid);
+
+        $this->assertTrue(api::can_edit_submission($submission, $context, (int) $owner->id));
+        $this->assertTrue(api::can_edit_submission($submission, $context, (int) $editingteacher->id));
+        $this->assertFalse(api::can_edit_submission($submission, $context, (int) $plainteacher->id));
+        $this->assertFalse(api::can_edit_submission($submission, $context, (int) $otherstudent->id));
+    }
+
+    /**
      * add_track()/update_track() persist a valid colour/icon, expose them via
      * get_tracks(), and reject an invalid colour or an icon outside the curated
      * allow-list (Revision round 1, 2026-07-03).

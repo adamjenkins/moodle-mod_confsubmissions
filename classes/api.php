@@ -54,6 +54,29 @@ class api {
     }
 
     /**
+     * Whether $userid may edit $submission via edit.php: either they own it and
+     * hold mod/confsubmissions:submit, or they hold mod/confsubmissions:editany
+     * regardless of ownership (user request, 2026-07-07 -- "editing teachers should
+     * also be able to edit any submission... especially the selected track").
+     *
+     * @param \stdClass $submission The confsubmissions_submission record
+     * @param \context $context The confsubmissions module context
+     * @param int|null $userid The user to check; defaults to the current $USER
+     * @return bool
+     */
+    public static function can_edit_submission(\stdClass $submission, \context $context, ?int $userid = null): bool {
+        global $USER;
+
+        $userid = $userid ?? (int) $USER->id;
+
+        if ((int) $submission->userid === $userid) {
+            return has_capability('mod/confsubmissions:submit', $context, $userid);
+        }
+
+        return has_capability('mod/confsubmissions:editany', $context, $userid);
+    }
+
+    /**
      * Sets a submission's workflow status. Called by mod_confprogram to keep this
      * plugin's own status column in sync with Accept/Reject decisions -- see that
      * plugin's classes/api.php::record_decision() docblock for why this is only ever
