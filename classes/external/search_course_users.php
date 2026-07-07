@@ -64,7 +64,17 @@ class search_course_users extends external_api {
         $context = \context_module::instance($cm->id);
 
         self::validate_context($context);
-        require_capability('mod/confsubmissions:submit', $context);
+        // An editingteacher who holds mod/confsubmissions:editany (but not :submit, which
+        // is a student-only archetype) may edit any submission via edit.php, including its
+        // speakers, so the speaker-picker autocomplete they rely on must accept either
+        // capability -- otherwise the editany edit flow can display a submission's existing
+        // speakers but never search for a new one.
+        if (!has_capability('mod/confsubmissions:submit', $context)
+                && !has_capability('mod/confsubmissions:editany', $context)
+        ) {
+            // Neither held: raise the usual "you need :submit" exception, unchanged.
+            require_capability('mod/confsubmissions:submit', $context);
+        }
 
         $enrolled = get_enrolled_users($context, '', 0, 'u.*', 'u.lastname, u.firstname');
 

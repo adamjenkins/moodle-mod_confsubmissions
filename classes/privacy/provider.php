@@ -316,6 +316,7 @@ class provider implements
             if ($ownsubmissionids) {
                 [$insql, $params] = $DB->get_in_or_equal($ownsubmissionids);
                 $DB->delete_records_select('confsubmissions_fieldval', "submissionid $insql", $params);
+                $DB->delete_records_select('confsubmissions_datepref', "submissionid $insql", $params);
                 $DB->delete_records_select('confsubmissions_speaker', "submissionid $insql", $params);
                 $DB->delete_records('confsubmissions_submission', [
                     'confsubmissions' => $confsubmissions->id,
