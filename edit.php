@@ -48,17 +48,23 @@ $context = context_module::instance($cm->id);
 $submission = null;
 $speakers = [];
 
+$iseditany = false;
+
 if ($submissionid) {
     $submission = api::get_submission($submissionid);
     if (!$submission || $submission->confsubmissions != $confsubmissions->id) {
         throw new \moodle_exception('invalidrecord', 'error', '', 'confsubmissions_submission');
     }
-    if ((int) $submission->userid !== (int) $USER->id) {
+    $isowner = (int) $submission->userid === (int) $USER->id;
+    if (!api::can_edit_submission($submission, $context)) {
         throw new \moodle_exception('error:notowner', 'mod_confsubmissions');
     }
-    // Ownership alone isn't enough: if the submit capability has since been revoked
-    // (e.g. role change), the owner should no longer be able to edit either.
-    require_capability('mod/confsubmissions:submit', $context);
+    // can_edit_submission() already folds in the owner's 'submit' check (an owner
+    // whose 'submit' capability has since been revoked returns false from it, same
+    // as before -- just via the generic 'error:notowner' message now instead of
+    // require_capability()'s own exception, since that separate call is redundant
+    // once can_edit_submission() above has already verified it).
+    $iseditany = !$isowner;
     $speakers = api::get_speakers($submission->id);
 } else {
     require_capability('mod/confsubmissions:submit', $context);
@@ -67,11 +73,16 @@ if ($submissionid) {
 $callisopen = ($confsubmissions->timeopen == 0 || time() >= $confsubmissions->timeopen)
     && ($confsubmissions->timeclose == 0 || time() < $confsubmissions->timeclose);
 
+$returnurl = optional_param('returnurl', '', PARAM_LOCALURL);
+
 $pageurl = new moodle_url('/mod/confsubmissions/edit.php', ['id' => $cm->id]);
 if ($submissionid) {
     $pageurl->param('submissionid', $submissionid);
 }
-$viewurl = new moodle_url('/mod/confsubmissions/view.php', ['id' => $cm->id]);
+if ($returnurl !== '') {
+    $pageurl->param('returnurl', $returnurl);
+}
+$viewurl = $returnurl !== '' ? new moodle_url($returnurl) : new moodle_url('/mod/confsubmissions/view.php', ['id' => $cm->id]);
 
 $PAGE->set_url($pageurl);
 $PAGE->set_title(format_string($confsubmissions->name));
@@ -85,7 +96,15 @@ echo $OUTPUT->heading(
     3
 );
 
-if (!$callisopen) {
+if ($iseditany) {
+    $owneruser = \core_user::get_user($submission->userid);
+    echo $OUTPUT->notification(
+        get_string('editinganothersubmission', 'mod_confsubmissions', $owneruser ? fullname($owneruser) : '-'),
+        'info'
+    );
+}
+
+if (!$callisopen && !$iseditany) {
     echo $OUTPUT->notification(get_string('callnotopen', 'mod_confsubmissions'), 'info');
     echo $OUTPUT->footer();
     exit;
