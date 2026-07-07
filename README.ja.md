@@ -1,0 +1,46 @@
+# mod_confsubmissions
+
+**Conference Submissions**（発表募集）— 発表募集（Call for Abstracts）を運用するための Moodle アクティビティモジュール。
+
+*ドキュメント: [English](README.md) · 日本語（このファイル）*
+
+[Conference Tools](https://github.com/adamjenkins/moodle-conference-tools) スイートの一部です:
+
+- **mod_confsubmissions**（本プラグイン）— 発表募集
+- [mod_confprogram](https://github.com/adamjenkins/moodle-mod_confprogram) — 査読ワークフロー＋公開プログラム
+- [mod_confscheduler](https://github.com/adamjenkins/moodle-mod_confscheduler) — ドラッグ＆ドロップのブロックスケジュール
+- [mod_confcheckin](https://github.com/adamjenkins/moodle-mod_confcheckin) — チケット・バッジ・QR チェックイン
+
+## 機能概要
+
+コースに **Conference Submissions** アクティビティを追加すると、発表募集を開始できます。発表者はタイトル・概要・発表者情報を提出し、主催者は収集する項目と分類方法を設定します。
+
+- **タイトル／概要の上限** — 文字数または単語数で制限し、入力中にライブで、送信時にサーバー側で再度チェックします。
+- **発表者** — 主発表者は既定で提出者になります。共同発表者は、登録済みユーザーを選ぶか氏名／メールを入力して追加し、ドラッグで並べ替えます。
+- **カスタムフィールド** — 任意のフィールド（短文・長文・ドロップダウン・チェックボックス・日付・数値・URL）を自由なラベルで必要なだけ追加でき、必須にもできます。
+- **トラックと応募種別** — トラック（任意の色・アイコン付き）は査読やスケジュールのために応募を分類します。応募種別（例:ライトニングトーク）にはスケジューラーが再利用する既定の発表時間が設定されます。
+- **希望日程** — カンファレンス開催日ごとにチェックボックスを任意で提示できます。スケジューラーの自動配置がこれを尊重します。特定の日を通常の応募者向けに無効化することもできます。
+- **取り下げと削除** — 応募者は自分の応募を取り下げられます（元に戻せます）。管理者は任意の応募を完全に削除できます。「すべての応募を編集」権限を持つ編集教師は、募集締切後でも、トラックを含む任意の応募を編集できます。
+- **通知** — 応募時には発表者へ、取り下げ時には主催者へメールが送信されます。テンプレートは編集可能で、アクティビティごとにオフにできます。
+- **バックアップ／リストアとコースリセット** — 完全対応。設定（トラック・種別・フィールド・テンプレート）はリセット後も残り、応募データは削除されます。
+
+他の Conference Tools プラグインは、本プラグインの `classes/api.php` を通じて連携します。
+
+## 要件
+
+- Moodle 5.2（`2026042000`）以降。
+
+## インストール
+
+```
+git clone https://github.com/adamjenkins/moodle-mod_confsubmissions.git mod/confsubmissions
+php admin/cli/upgrade.php
+```
+
+## ライセンス
+
+GNU GPL v3 以降。[LICENSE](LICENSE) を参照してください。
+
+## 作者
+
+Adam Jenkins <adam@wisecat.net>
