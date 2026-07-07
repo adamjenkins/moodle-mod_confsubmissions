@@ -68,6 +68,11 @@ $PAGE->set_title(format_string($confsubmissions->name));
 $PAGE->set_heading(format_string($course->fullname));
 $PAGE->set_context($context);
 
+// The activity header would otherwise auto-render the intro a second time
+// (when "Display description on course page" is enabled) on top of the
+// manual format_module_intro() box this page renders itself below.
+$PAGE->activityheader->set_attrs(['description' => '']);
+
 $callisopen = ($confsubmissions->timeopen == 0 || time() >= $confsubmissions->timeopen)
     && ($confsubmissions->timeclose == 0 || time() < $confsubmissions->timeclose);
 
