@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+- User request (2026-07-07): "Editing teachers should also be able to edit
+  any submission (especially the selected track) from the list view."
+  Added a new `mod/confsubmissions:editany` capability (granted to
+  `editingteacher` and `manager`, deliberately not plain `teacher` --
+  distinct from the manager-only `deleteany`). `edit.php` now allows an
+  `editany` holder to open and save any submission on the instance,
+  regardless of ownership, and bypasses the open-call-window restriction
+  for them (a submitter without `editany` is still bound by both). A new
+  `returnurl` param (validated `PARAM_LOCALURL`) lets a caller send the
+  editor back to a specific page after saving/cancelling instead of this
+  plugin's own `view.php`. `view.php`'s "All submissions" table gains an
+  Edit link for `editany` holders, alongside the existing `deleteany`-gated
+  Delete link. See `mod_confprogram`'s own changelog for the matching
+  Decision-report entry point into this same `edit.php`.
 - User request (2026-07-06): added `composer.json` so the plugin can be
   published on Packagist per the
   [Moodle Composer guide](https://moodledev.io/docs/5.2/guides/composer) --

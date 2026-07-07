@@ -31,6 +31,12 @@ Add a "Conference Submissions" activity to a course to open a call for abstracts
 - **`api::set_status()` only fires the withdrawal notification for the literal `'withdrawn'` status**, never for `mod_confprogram`'s own accept/reject decision-sync calls through the same method — safe because `VALID_STATUSES` has no `'waitlisted'` entry (waitlist is a `confprogram_decision`-only concept), so there's no overlap to worry about.
 - **A per-instance notifications master switch** (`confsubmissions.notificationsenabled`, default on) overrides every per-type template: when off, `notifier` sends nothing at all for that instance, regardless of what's configured on notifications.php. Editable as a checkbox on that same screen.
 - **Backup/restore defines the `confsubmissions_submission` id mapping `mod_confprogram`/`mod_confscheduler` both depend on** (user request, 2026-07-06): those sibling plugins' own restore steps resolve their tables' `submissionid` references via `get_mappingid('confsubmissions_submission', ...)` from their own `after_restore()` -- restore processing order across activities in the same course backup is not guaranteed until every activity's main structure step has completed, so this mapping must exist unconditionally by the time any sibling's `after_restore()` runs. Instance configuration (tracks, submission types, optional fields, notification templates) is backed up regardless of the "include user info" setting; only submissions (and everything attached to one) are gated on it, matching how core's own `mod_choice` treats its `choice_options` vs. `choice_answers`. Verified with a real `backup_controller`/`restore_controller` cycle in `tests/backup/restore_confsubmissions_test.php`, not just a unit test of the stepslib classes.
+- **An `editingteacher`/`manager` holding the new `mod/confsubmissions:editany`
+  capability can edit any submission on the instance** via `edit.php`,
+  regardless of ownership and regardless of whether the call is currently
+  open -- unlike the submitter's own edit access, which still requires both.
+  `mod_confprogram`'s Decision report links into this same `edit.php` for
+  exactly this purpose (see that plugin's own README).
 
 ## Requirements
 
