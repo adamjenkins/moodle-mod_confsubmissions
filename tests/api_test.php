@@ -495,4 +495,35 @@ final class api_test extends advanced_testcase {
         $this->expectException(\invalid_parameter_exception::class);
         api::add_field($confsubmissions->id, 'Bad type', 'not-a-real-type', null, false);
     }
+
+    /**
+     * set_status() can move a submission from 'withdrawn' back to 'submitted' -- the
+     * business-logic half of the admin "Unwithdraw" action (view.php, user request,
+     * 2026-07-07). set_status() places no restriction on the FROM status, only on the
+     * target being one of VALID_STATUSES, so this is already possible with no new
+     * method; this test locks that behaviour in.
+     */
+    public function test_set_status_unwithdraw(): void {
+        $this->resetAfterTest();
+        global $DB;
+
+        $confsubmissions = $this->create_instance();
+
+        $originaltimemodified = time() - 100;
+        $submissionid = $DB->insert_record('confsubmissions_submission', (object) [
+            'confsubmissions' => $confsubmissions->id,
+            'userid'          => 2,
+            'title'           => 'Test submission',
+            'abstract'        => 'Abstract text',
+            'status'          => 'withdrawn',
+            'timecreated'     => time() - 100,
+            'timemodified'    => $originaltimemodified,
+        ]);
+
+        api::set_status($submissionid, 'submitted');
+
+        $submission = $DB->get_record('confsubmissions_submission', ['id' => $submissionid]);
+        $this->assertSame('submitted', $submission->status);
+        $this->assertGreaterThan($originaltimemodified, $submission->timemodified);
+    }
 }

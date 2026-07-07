@@ -36,6 +36,7 @@ $id = required_param('id', PARAM_INT);
 $filtertrack = optional_param('trackid', '', PARAM_INT);
 $filterstatus = optional_param('status', '', PARAM_ALPHA);
 $withdrawid = optional_param('withdraw', 0, PARAM_INT);
+$unwithdrawid = optional_param('unwithdraw', 0, PARAM_INT);
 $deleteid = optional_param('delete', 0, PARAM_INT);
 $confirm = optional_param('confirm', 0, PARAM_BOOL);
 
@@ -110,6 +111,39 @@ if ($withdrawid) {
 
     api::set_status($withdrawid, 'withdrawn');
     redirect($pageurl, get_string('submissionwithdrawn', 'mod_confsubmissions'), null, \core\output\notification::NOTIFY_SUCCESS);
+}
+
+// Unwithdraw: the organiser-side reverse of the submitter-owned Withdraw above (user
+// request, 2026-07-07: a withdrawn submission should only ever come back via this
+// explicit action or mod_confsubmissions:deleteany -- see mod_confprogram's own fix,
+// same request, for why phase-cycling must NOT do this implicitly). Gated on editany
+// rather than a new capability: reversing someone else's status change is the same
+// risk tier as editing their submission outright.
+if ($unwithdrawid) {
+    require_sesskey();
+    require_capability('mod/confsubmissions:editany', $context);
+
+    $submission = api::get_submission($unwithdrawid);
+    if (!$submission || $submission->confsubmissions != $confsubmissions->id) {
+        throw new \moodle_exception('invalidrecord', 'error', '', 'confsubmissions_submission');
+    }
+    if ($submission->status !== 'withdrawn') {
+        throw new \moodle_exception('error:notwithdrawn', 'mod_confsubmissions');
+    }
+
+    if (!$confirm) {
+        echo $OUTPUT->header();
+        echo $OUTPUT->confirm(
+            get_string('confirmunwithdraw', 'mod_confsubmissions', format_string($submission->title)),
+            new moodle_url($pageurl, ['unwithdraw' => $unwithdrawid, 'confirm' => 1, 'sesskey' => sesskey()]),
+            $pageurl
+        );
+        echo $OUTPUT->footer();
+        exit;
+    }
+
+    api::set_status($unwithdrawid, 'submitted');
+    redirect($pageurl, get_string('submissionunwithdrawn', 'mod_confsubmissions'), null, \core\output\notification::NOTIFY_SUCCESS);
 }
 
 // Delete: permanent, manager/admin-only (mod/confsubmissions:deleteany is a
@@ -327,7 +361,12 @@ if ($canviewall) {
                     'id'           => $cm->id,
                     'submissionid' => $submission->id,
                 ]);
-                $row[] = html_writer::link($editurl, get_string('edit'));
+                $editanyactions = [html_writer::link($editurl, get_string('edit'))];
+                if ($submission->status === 'withdrawn') {
+                    $unwithdrawurl = new moodle_url($pageurl, ['unwithdraw' => $submission->id, 'sesskey' => sesskey()]);
+                    $editanyactions[] = html_writer::link($unwithdrawurl, get_string('unwithdraw', 'mod_confsubmissions'));
+                }
+                $row[] = implode(' | ', $editanyactions);
             }
             if ($candeleteany) {
                 $deleteurl = new moodle_url($pageurl, ['delete' => $submission->id, 'sesskey' => sesskey()]);
