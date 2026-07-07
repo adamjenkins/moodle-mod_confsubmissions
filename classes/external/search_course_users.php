@@ -69,9 +69,9 @@ class search_course_users extends external_api {
         // speakers, so the speaker-picker autocomplete they rely on must accept either
         // capability -- otherwise the editany edit flow can display a submission's existing
         // speakers but never search for a new one.
-        if (!has_capability('mod/confsubmissions:submit', $context)
-                && !has_capability('mod/confsubmissions:editany', $context)
-        ) {
+        $cansearch = has_capability('mod/confsubmissions:submit', $context)
+            || has_capability('mod/confsubmissions:editany', $context);
+        if (!$cansearch) {
             // Neither held: raise the usual "you need :submit" exception, unchanged.
             require_capability('mod/confsubmissions:submit', $context);
         }
