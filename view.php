@@ -52,6 +52,7 @@ $cansubmit = has_capability('mod/confsubmissions:submit', $context);
 $canmanagetracks = has_capability('mod/confsubmissions:managetracks', $context);
 $canmanageform = has_capability('mod/confsubmissions:manageform', $context);
 $candeleteany = has_capability('mod/confsubmissions:deleteany', $context);
+$caneditany = has_capability('mod/confsubmissions:editany', $context);
 $canmanagenotifications = has_capability('mod/confsubmissions:managenotifications', $context);
 
 if (!$canviewall && !$canviewown) {
@@ -281,6 +282,9 @@ if ($canviewall) {
             get_string('status', 'mod_confsubmissions'),
             get_string('submitted', 'mod_confsubmissions'),
         ];
+        if ($caneditany) {
+            $table->head[] = '';
+        }
         if ($candeleteany) {
             $table->head[] = '';
         }
@@ -313,6 +317,13 @@ if ($canviewall) {
                 get_string('status_' . $submission->status, 'mod_confsubmissions'),
                 userdate($submission->timecreated),
             ];
+            if ($caneditany) {
+                $editurl = new moodle_url('/mod/confsubmissions/edit.php', [
+                    'id'           => $cm->id,
+                    'submissionid' => $submission->id,
+                ]);
+                $row[] = html_writer::link($editurl, get_string('edit'));
+            }
             if ($candeleteany) {
                 $deleteurl = new moodle_url($pageurl, ['delete' => $submission->id, 'sesskey' => sesskey()]);
                 $row[] = html_writer::link($deleteurl, get_string('delete'));
