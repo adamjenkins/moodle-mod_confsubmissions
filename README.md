@@ -19,7 +19,7 @@ Add a **Conference Submissions** activity to open a call for abstracts. Presente
 - **Speakers** — the primary speaker defaults to the submitter; co-presenters are added by picking an enrolled user or typing a name/email, and reordered by drag.
 - **Custom fields** — add any number of optional fields (short or long text, dropdown, checkbox, date, number, or URL), each freely labelled and optionally required.
 - **Tracks & submission types** — tracks (with an optional colour and icon) categorise submissions for review and scheduling; submission types (e.g. Lightning Talk) each carry a default duration the scheduler reuses.
-- **Preferred dates** — optionally offer one checkbox per conference day; the scheduler's autoscheduler honours these. Specific days can be disabled for regular submitters.
+- **Preferred dates** — optionally offer one checkbox per conference day; the scheduler's autoscheduler honours these. Specific days can be disabled for regular submitters, with an optional short reason shown in parentheses next to the greyed-out day.
 - **Withdraw & delete** — submitters can withdraw their own submission (reversible); managers can permanently delete any. An editing teacher with *Edit any submission* can edit any submission, including its track, even after the call closes.
 - **Notifications** — speakers are emailed when a submission is made and organisers when one is withdrawn; templates are editable and can be switched off per activity.
 - **Backup/restore & course reset** — fully supported. Configuration (tracks, types, fields, templates) survives a reset; submissions do not.
