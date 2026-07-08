@@ -488,7 +488,7 @@ final class submission_form_test extends advanced_testcase {
         $day1 = usergetmidnight(strtotime('2026-09-03 09:00:00'));
         $day2 = usergetmidnight(strtotime('2026-09-04 09:00:00'));
         $day3 = usergetmidnight(strtotime('2026-09-05 09:00:00'));
-        api::set_disabled_dates((int) $instance->id, [$day2]);
+        api::set_disabled_dates((int) $instance->id, [$day2 => '']);
 
         // Re-fetch: $instance is a stale in-memory copy from create_module(), predating
         // the set_disabled_dates() call above -- the form must see the persisted value.
@@ -521,6 +521,57 @@ final class submission_form_test extends advanced_testcase {
         $phtml = $privilegedform->render();
         $this->assertFalse($this->checkbox_disabled($phtml, 'preferreddates', $day2));
         $this->assertTrue($this->checkbox_checked($phtml, 'preferreddates', $day2));
+    }
+
+    /**
+     * A disabled day's organiser-entered reason (user request, 2026-07-09) is shown
+     * in parentheses next to its greyed-out checkbox label; a disabled day with no
+     * reason given shows no parentheses at all, and a privileged (showalldays)
+     * viewer -- who does not see the disabled treatment in the first place -- does
+     * not see the reason either.
+     */
+    public function test_disabled_date_reason_shown_in_parentheses(): void {
+        $this->resetAfterTest();
+
+        $course = $this->getDataGenerator()->create_course();
+        $instance = $this->getDataGenerator()->create_module('confsubmissions', [
+            'course'              => $course->id,
+            'titlelimit'          => 0,
+            'abstractlimit'       => 0,
+            'conferencestart'     => strtotime('2026-09-03 09:00:00'),
+            'conferenceend'       => strtotime('2026-09-05 17:00:00'),
+            'offerpreferreddates' => 1,
+        ]);
+        $cm = get_coursemodule_from_instance('confsubmissions', $instance->id);
+
+        $day2 = usergetmidnight(strtotime('2026-09-04 09:00:00'));
+        $day3 = usergetmidnight(strtotime('2026-09-05 09:00:00'));
+        api::set_disabled_dates((int) $instance->id, [
+            $day2 => 'Venue unavailable',
+            $day3 => '',
+        ]);
+
+        global $DB;
+        $instance = $DB->get_record('confsubmissions', ['id' => $instance->id], '*', MUST_EXIST);
+
+        $regularform = new submission_form(null, [
+            'cmid'            => $cm->id,
+            'confsubmissions' => $instance,
+            'speakers'        => [],
+        ]);
+        $rhtml = $regularform->render();
+        $this->assertStringContainsString('(Venue unavailable)', $rhtml);
+        // day3 is disabled but has no reason -- no bare "()" should appear for it.
+        $this->assertStringNotContainsString('()', $rhtml);
+
+        $privilegedform = new submission_form(null, [
+            'cmid'            => $cm->id,
+            'confsubmissions' => $instance,
+            'speakers'        => [],
+            'showalldays'     => true,
+        ]);
+        $phtml = $privilegedform->render();
+        $this->assertStringNotContainsString('Venue unavailable', $phtml);
     }
 
     /**

@@ -666,36 +666,96 @@ class api {
      * greyed out and forced unchecked (not removed from the list) for any caller that
      * did not pass its 'showalldays' customdata flag.
      *
+     * confsubmissions.disableddates stores a JSON array of {date, reason} objects
+     * (changed from a plain comma-separated timestamp list, user request,
+     * 2026-07-09 -- see db/upgrade.php's 2026070800 step for the one-time migration
+     * of existing data into this shape, and get_disabled_date_reasons() below for
+     * the reason half of each entry). This method only ever returns the plain
+     * timestamp list, unchanged in shape from before that change, so every existing
+     * caller that only cares "is this day disabled" needed no changes.
+     *
      * @param \stdClass $confsubmissions The confsubmissions instance record
      * @return int[] Midnight timestamps of the disabled days
      */
     public static function get_disabled_dates(\stdClass $confsubmissions): array {
+        return array_keys(self::get_disabled_date_entries($confsubmissions));
+    }
+
+    /**
+     * Returns the reason text attached to each org-wide disabled preferred-date day
+     * (user request, 2026-07-09), for the days that actually have one -- a day
+     * disabled with no reason given (the optional field left blank) simply has no
+     * entry here, so callers can use `$reasons[$day] ?? null`. See
+     * get_disabled_dates()'s own docblock for the underlying storage format.
+     *
+     * @param \stdClass $confsubmissions The confsubmissions instance record
+     * @return array<int, string> Non-empty reason text keyed by midnight timestamp
+     */
+    public static function get_disabled_date_reasons(\stdClass $confsubmissions): array {
+        return array_filter(self::get_disabled_date_entries($confsubmissions), fn($reason) => $reason !== '');
+    }
+
+    /**
+     * Decodes confsubmissions.disableddates' JSON-array-of-{date,reason} storage
+     * into a flat date => reason map, shared by get_disabled_dates() and
+     * get_disabled_date_reasons() above. A malformed/unparseable value (should not
+     * happen post-migration, but a corrupt or hand-edited row must never fatal a
+     * page load) degrades to "no disabled dates" rather than throwing.
+     *
+     * @param \stdClass $confsubmissions The confsubmissions instance record
+     * @return array<int, string> Reason text (possibly '') keyed by midnight timestamp
+     */
+    private static function get_disabled_date_entries(\stdClass $confsubmissions): array {
         if (empty($confsubmissions->disableddates)) {
             return [];
         }
 
-        return array_map('intval', array_filter(explode(',', $confsubmissions->disableddates), 'strlen'));
+        $decoded = json_decode($confsubmissions->disableddates, true);
+        if (!is_array($decoded)) {
+            return [];
+        }
+
+        $entries = [];
+        foreach ($decoded as $entry) {
+            if (!isset($entry['date'])) {
+                continue;
+            }
+            $entries[(int) $entry['date']] = (string) ($entry['reason'] ?? '');
+        }
+
+        ksort($entries);
+
+        return $entries;
     }
 
     /**
-     * Replaces an instance's org-wide disabled preferred-date days with a new set.
+     * Replaces an instance's org-wide disabled preferred-date days (and their
+     * optional reasons, user request, 2026-07-09) with a new set.
      *
      * @param int $confsubmissionsid The confsubmissions instance id
-     * @param int[] $dates Midnight timestamps of the days to disable
+     * @param array<int, string> $datestoreasons Reason text (may be '' for "no
+     *     reason given"), keyed by midnight timestamp, for every day to disable
      * @return void
      */
-    public static function set_disabled_dates(int $confsubmissionsid, array $dates): void {
+    public static function set_disabled_dates(int $confsubmissionsid, array $datestoreasons): void {
         global $DB;
 
-        $dates = array_unique(array_map('intval', $dates));
-        sort($dates);
+        $normalised = [];
+        foreach ($datestoreasons as $date => $reason) {
+            $normalised[(int) $date] = trim((string) $reason);
+        }
+        ksort($normalised);
 
-        $DB->set_field(
-            'confsubmissions',
-            'disableddates',
-            $dates ? implode(',', $dates) : null,
-            ['id' => $confsubmissionsid]
-        );
+        $encoded = null;
+        if ($normalised) {
+            $entries = [];
+            foreach ($normalised as $date => $reason) {
+                $entries[] = ['date' => $date, 'reason' => $reason];
+            }
+            $encoded = json_encode($entries);
+        }
+
+        $DB->set_field('confsubmissions', 'disableddates', $encoded, ['id' => $confsubmissionsid]);
     }
 
     /**

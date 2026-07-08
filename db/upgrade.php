@@ -309,5 +309,32 @@ function xmldb_confsubmissions_upgrade($oldversion) {
         upgrade_mod_savepoint(true, 2026070601, 'confsubmissions');
     }
 
+    if ($oldversion < 2026070800) {
+        // Per-date reasons for org-wide disabled preferred days (user request,
+        // 2026-07-09): disableddates' stored format changes from a plain
+        // comma-separated timestamp list to a JSON array of {date, reason}
+        // objects -- see classes/api.php's get_disabled_dates()/
+        // get_disabled_date_reasons() docblocks. Migrate every existing row's
+        // old-format value to the new shape (empty reason) here, once, so
+        // application code can assume the new format unconditionally afterwards
+        // rather than permanently supporting two stored shapes.
+        $rs = $DB->get_recordset_select('confsubmissions', 'disableddates IS NOT NULL', []);
+        foreach ($rs as $instance) {
+            $trimmed = trim((string) $instance->disableddates);
+            if ($trimmed === '' || $trimmed[0] === '[') {
+                // Already empty, or already JSON (e.g. this step re-running after a
+                // partial upgrade) -- leave it alone rather than double-encoding.
+                continue;
+            }
+
+            $dates = array_map('intval', array_filter(explode(',', $trimmed), 'strlen'));
+            $entries = array_map(fn($date) => ['date' => $date, 'reason' => ''], $dates);
+            $DB->set_field('confsubmissions', 'disableddates', json_encode($entries), ['id' => $instance->id]);
+        }
+        $rs->close();
+
+        upgrade_mod_savepoint(true, 2026070800, 'confsubmissions');
+    }
+
     return true;
 }

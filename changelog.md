@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- User request (2026-07-09): "Manage disabled preferred days" (`dates.php`) can now
+  record a short optional reason alongside each disabled day, shown in parentheses
+  next to the greyed-out checkbox on the New/edit submission pages (e.g. "18 August
+  2026 (Venue unavailable)"). `confsubmissions.disableddates`' stored format changed
+  from a plain comma-separated timestamp list to a JSON array of `{date, reason}`
+  objects (`db/upgrade.php`'s `2026070800` step migrates any existing data
+  one-time); `api::get_disabled_dates()` keeps its existing `int[]` contract
+  unchanged, and a new `api::get_disabled_date_reasons()` returns just the days
+  that actually have a non-empty reason. The reason is escaped with `s()` before
+  going into the form element's label, since (unlike most content in this project)
+  a moodleform label is rendered as trusted HTML -- an unescaped reason would be a
+  stored XSS reachable by anyone holding `mod/confsubmissions:manageform`.
 - Bug fix (2026-07-08): the "All submissions" track filter on `view.php` broke
   after its first real use -- selecting a specific track and then switching
   back to "All tracks" silently returned zero rows instead of clearing the

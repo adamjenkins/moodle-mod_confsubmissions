@@ -402,7 +402,7 @@ final class api_test extends advanced_testcase {
 
         $day1 = strtotime('2026-09-03 00:00:00');
         $day2 = strtotime('2026-09-04 00:00:00');
-        api::set_disabled_dates((int) $confsubmissions->id, [$day2, $day1, $day1]);
+        api::set_disabled_dates((int) $confsubmissions->id, [$day2 => '', $day1 => '']);
 
         $confsubmissions = $DB->get_record('confsubmissions', ['id' => $confsubmissions->id], '*', MUST_EXIST);
         $disabled = api::get_disabled_dates($confsubmissions);
@@ -413,7 +413,7 @@ final class api_test extends advanced_testcase {
 
         // Re-setting replaces the old set entirely, not adding to it.
         $day3 = strtotime('2026-09-05 00:00:00');
-        api::set_disabled_dates((int) $confsubmissions->id, [$day3]);
+        api::set_disabled_dates((int) $confsubmissions->id, [$day3 => '']);
         $confsubmissions = $DB->get_record('confsubmissions', ['id' => $confsubmissions->id], '*', MUST_EXIST);
         $this->assertSame([$day3], api::get_disabled_dates($confsubmissions));
 
@@ -422,6 +422,32 @@ final class api_test extends advanced_testcase {
         $confsubmissions = $DB->get_record('confsubmissions', ['id' => $confsubmissions->id], '*', MUST_EXIST);
         $this->assertNull($confsubmissions->disableddates);
         $this->assertSame([], api::get_disabled_dates($confsubmissions));
+    }
+
+    /**
+     * get_disabled_date_reasons() (user request, 2026-07-09) returns only the days
+     * that actually have a non-empty reason, keyed by timestamp -- a day disabled
+     * with no reason given has no entry at all, matching a `$reasons[$day] ?? null`
+     * lookup convention.
+     */
+    public function test_get_disabled_date_reasons(): void {
+        $this->resetAfterTest();
+        global $DB;
+
+        $confsubmissions = $this->create_instance();
+        $this->assertSame([], api::get_disabled_date_reasons($confsubmissions));
+
+        $day1 = strtotime('2026-09-03 00:00:00');
+        $day2 = strtotime('2026-09-04 00:00:00');
+        api::set_disabled_dates((int) $confsubmissions->id, [
+            $day1 => 'Public holiday',
+            $day2 => '',
+        ]);
+
+        $confsubmissions = $DB->get_record('confsubmissions', ['id' => $confsubmissions->id], '*', MUST_EXIST);
+        $this->assertSame([$day1 => 'Public holiday'], api::get_disabled_date_reasons($confsubmissions));
+        // Both days are still disabled, reason or not.
+        $this->assertSame([$day1, $day2], api::get_disabled_dates($confsubmissions));
     }
 
     /**

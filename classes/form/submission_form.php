@@ -189,6 +189,10 @@ class submission_form extends \moodleform {
         // (editingteacher+) passes 'showalldays' so every day stays fully interactive
         // for them, disabled or not.
         $disableddates = empty($this->_customdata['showalldays']) ? api::get_disabled_dates($cs) : [];
+        // The organiser-entered reason a day was disabled (user request, 2026-07-09),
+        // shown in parentheses next to it below -- see api::get_disabled_date_reasons()'s
+        // docblock: a day disabled with no reason given simply has no entry here.
+        $disabledreasons = empty($this->_customdata['showalldays']) ? api::get_disabled_date_reasons($cs) : [];
 
         if (!empty($cs->offerpreferreddates) && $this->conferencedays) {
             $mform->addElement('header', 'preferreddatesheader', get_string('preferreddates', 'mod_confsubmissions'));
@@ -205,10 +209,20 @@ class submission_form extends \moodleform {
                 $elname = 'preferreddates[' . $day . ']';
                 $isdisableddate = in_array($day, $disableddates, true);
 
+                $label = userdate($day, get_string('strftimedate', 'langconfig'));
+                if ($isdisableddate && !empty($disabledreasons[$day])) {
+                    // s() escapes the organiser-entered reason before it goes into this
+                    // HTML label: unlike most content in this project (rendered through
+                    // format_string()/format_text()), a moodleform element label is
+                    // output as trusted HTML, so an unescaped reason would be a stored
+                    // XSS reachable by anyone holding mod/confsubmissions:manageform.
+                    $label .= ' (' . s($disabledreasons[$day]) . ')';
+                }
+
                 $mform->addElement(
                     'advcheckbox',
                     $elname,
-                    userdate($day, get_string('strftimedate', 'langconfig')),
+                    $label,
                     null,
                     $isdisableddate ? ['disabled' => 'disabled', 'class' => 'text-muted'] : []
                 );
