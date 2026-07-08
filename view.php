@@ -33,7 +33,15 @@ require_once($CFG->dirroot . '/mod/confsubmissions/lib.php');
 use mod_confsubmissions\api;
 
 $id = required_param('id', PARAM_INT);
-$filtertrack = optional_param('trackid', '', PARAM_INT);
+// 0 (not '') is the "no filter" sentinel: optional_param() applies PARAM_INT
+// cleaning to any value present in the request, including an empty string
+// (the "All tracks" option's value), and (int) '' is 0, not '' -- so a ''
+// default here would only ever match on the very first, query-string-less
+// page load. trackid is an auto-increment id (never legitimately 0), so 0
+// is safe to use as the sentinel, matching this project's established
+// "0 = unset" convention for PARAM_INT select fields (see e.g.
+// mod_confcheckin's confprogramcmid/paymentaccountid handling).
+$filtertrack = optional_param('trackid', 0, PARAM_INT);
 $filterstatus = optional_param('status', '', PARAM_ALPHA);
 $withdrawid = optional_param('withdraw', 0, PARAM_INT);
 $unwithdrawid = optional_param('unwithdraw', 0, PARAM_INT);
@@ -284,7 +292,7 @@ if ($canviewall) {
     ]);
     echo html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'id', 'value' => $cm->id]);
 
-    $trackfilteroptions = ['' => get_string('alltracks', 'mod_confsubmissions')] + $tracknames;
+    $trackfilteroptions = [0 => get_string('alltracks', 'mod_confsubmissions')] + $tracknames;
     echo html_writer::label(get_string('track', 'mod_confsubmissions'), 'menutrackid', false, ['class' => 'mr-1']);
     echo html_writer::select($trackfilteroptions, 'trackid', $filtertrack, null, ['class' => 'mr-3']);
 
@@ -303,7 +311,7 @@ if ($canviewall) {
     echo html_writer::end_tag('form');
 
     $filters = [];
-    if ($filtertrack !== '') {
+    if ($filtertrack !== 0) {
         $filters['trackid'] = $filtertrack;
     }
     if ($filterstatus !== '') {

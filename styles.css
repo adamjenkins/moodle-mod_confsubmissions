@@ -47,3 +47,22 @@
 .mod_confsubmissions-speaker-sortable .mod_confsubmissions-speaker-row.sortable-list-is-dragged {
     opacity: 0.5;
 }
+
+/*
+ * submission.php's track pill (classes/output/submission_detail.php,
+ * get_track_pill_html()) -- matches the visual language mod_confprogram's
+ * .mod_confprogram-track-pill and mod_confscheduler's own track pills already use
+ * elsewhere in this project (user report, 2026-07-08: this page previously showed
+ * the track as plain text). Background/text colour come from the track's own
+ * colour via an inline style set per-track by that PHP method, not from this rule.
+ */
+.mod_confsubmissions-track-pill {
+    display: inline-block;
+    background: #3366cc;
+    color: #fff;
+    border: 1px solid #999;
+    border-radius: 10px;
+    padding: 0 0.4rem;
+    font-size: 0.75rem;
+    white-space: nowrap;
+}

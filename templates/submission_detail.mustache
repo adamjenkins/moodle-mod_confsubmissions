@@ -26,7 +26,7 @@
     {
         "title": "My great talk",
         "abstract": "This talk is about...",
-        "trackname": "Track A",
+        "trackpill": "<span class=\"mod_confsubmissions-track-pill\">Track A</span>",
         "status": "Submitted",
         "timecreated": "1 January 2026, 9:00 AM",
         "timemodified": "1 January 2026, 9:00 AM",
@@ -44,10 +44,17 @@
 <div class="mod_confsubmissions-submission-detail">
     <dl class="row">
         <dt class="col-sm-3">{{#str}}title, mod_confsubmissions{{/str}}</dt>
-        <dd class="col-sm-9">{{title}}</dd>
+        {{! "title" is pre-escaped by format_string() in submission_detail::export_for_template(),
+            so it is safe -- and, per that method's own comment, REQUIRED -- to output unescaped
+            here, exactly like "abstract" below; double-mustache output here previously
+            double-escaped '&' into '&amp;amp;'. }}
+        <dd class="col-sm-9">{{{title}}}</dd>
 
         <dt class="col-sm-3">{{#str}}track, mod_confsubmissions{{/str}}</dt>
-        <dd class="col-sm-9">{{trackname}}</dd>
+        {{! "trackpill" is trusted HTML (a coloured pill <span>, or an already-escaped "No track"
+            string) built by submission_detail::get_track_pill_html() -- see that method's own
+            comment for why it must be output unescaped here. }}
+        <dd class="col-sm-9">{{{trackpill}}}</dd>
 
         <dt class="col-sm-3">{{#str}}status, mod_confsubmissions{{/str}}</dt>
         <dd class="col-sm-9">{{status}}</dd>

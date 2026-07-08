@@ -41,8 +41,8 @@ class submission_detail implements renderable, templatable {
     /** @var array Optional field values keyed by fieldid */
     protected $fieldvalues;
 
-    /** @var string|null The track name, or null if unassigned */
-    protected $trackname;
+    /** @var stdClass|null The confsubmissions_track record, or null if unassigned */
+    protected $track;
 
     /** @var bool Whether the current user may edit this submission */
     protected $canedit;
@@ -57,7 +57,7 @@ class submission_detail implements renderable, templatable {
      * @param array $speakers Speaker records, in sort order
      * @param array $fields This instance's optional-field configuration rows, keyed by id
      * @param array $fieldvalues Optional field values keyed by fieldid
-     * @param string|null $trackname The track name, or null if unassigned
+     * @param stdClass|null $track The confsubmissions_track record, or null if unassigned
      * @param bool $canedit Whether the current user may edit this submission
      * @param \moodle_url|null $editurl The edit URL, when $canedit is true
      */
@@ -66,7 +66,7 @@ class submission_detail implements renderable, templatable {
         array $speakers,
         array $fields,
         array $fieldvalues,
-        ?string $trackname,
+        ?stdClass $track,
         bool $canedit,
         ?\moodle_url $editurl
     ) {
@@ -74,7 +74,7 @@ class submission_detail implements renderable, templatable {
         $this->speakers = $speakers;
         $this->fields = $fields;
         $this->fieldvalues = $fieldvalues;
-        $this->trackname = $trackname;
+        $this->track = $track;
         $this->canedit = $canedit;
         $this->editurl = $editurl;
     }
@@ -116,9 +116,15 @@ class submission_detail implements renderable, templatable {
         }
 
         return [
+            // format_string() already HTML-escapes by default (e.g. '&' -> '&amp;'); the
+            // template outputs both of these unescaped ({{{...}}}, not {{...}}), matching
+            // 'abstract' below -- otherwise Mustache's own default auto-escaping runs a
+            // SECOND time on top of format_string()'s, turning '&amp;' into '&amp;amp;'
+            // (user report, 2026-07-08: this is exactly why "Product & Design" rendered as
+            // the literal text "Product &amp; Design" on submission.php).
             'title'         => format_string($this->submission->title),
             'abstract'      => nl2br(s($this->submission->abstract)),
-            'trackname'     => $this->trackname ? format_string($this->trackname) : get_string('notrack', 'mod_confsubmissions'),
+            'trackpill'     => $this->get_track_pill_html(),
             'status'        => get_string('status_' . $this->submission->status, 'mod_confsubmissions'),
             'timecreated'   => userdate($this->submission->timecreated),
             'timemodified'  => userdate($this->submission->timemodified),
@@ -128,6 +134,64 @@ class submission_detail implements renderable, templatable {
             'canedit'       => $this->canedit,
             'editurl'       => $this->editurl ? $this->editurl->out(false) : null,
         ];
+    }
+
+    /**
+     * Builds the coloured pill-badge HTML for this submission's track, or a plain "No
+     * track" string when unassigned -- matching the visual language
+     * mod_confprogram\local\field_formatter::get_track_pill_html() and
+     * mod_confscheduler's own track pills already use elsewhere in this project (user
+     * report, 2026-07-08: this page was showing the track as plain text, not a pill).
+     * A duplicate implementation, not a shared call into mod_confprogram\local\
+     * field_formatter::get_track_pill_html(): this plugin is upstream of
+     * mod_confprogram (see RELATIONS.md's dependency graph) and must not depend on it.
+     *
+     * Deliberately WITHOUT escape => false on format_string() below: html_writer::tag()
+     * does not itself escape its content argument, so format_string()'s own default
+     * HTML-entity escaping is exactly what's needed for this to be valid HTML -- not a
+     * double-escape, since (unlike 'title'/'abstract' above) this returned string is
+     * never passed through Mustache's auto-escaping downstream (the template outputs
+     * it via {{{trackpill}}}).
+     *
+     * @return string Safe HTML: a <span> pill, or an already-escaped "No track" string
+     */
+    protected function get_track_pill_html(): string {
+        if (!$this->track) {
+            return get_string('notrack', 'mod_confsubmissions');
+        }
+
+        $name = format_string($this->track->name, true);
+        $style = '';
+        if (!empty($this->track->colour) && preg_match('/^#[0-9a-fA-F]{6}$/', $this->track->colour)) {
+            $textcolour = self::contrast_text_colour($this->track->colour);
+            $style = "background-color:{$this->track->colour};color:{$textcolour}";
+        }
+
+        return \html_writer::tag('span', $name, [
+            'class' => 'mod_confsubmissions-track-pill',
+            'style' => $style,
+        ]);
+    }
+
+    /**
+     * Picks black or white text to sit legibly on top of a given background hex
+     * colour, using the classic YIQ "perceived brightness" formula. A duplicate of
+     * mod_confprogram\local\field_formatter::contrast_text_colour() (itself a PHP-side
+     * duplicate of mod_confscheduler/amd/src/colour_utils.js's contrastTextColour()) --
+     * kept in sync by hand, matching this project's established practice of
+     * duplicating small pure display logic rather than sharing it across plugins.
+     *
+     * @param string $hex A 6-digit hex colour, with or without a leading '#'
+     * @return string '#000000' or '#ffffff'
+     */
+    private static function contrast_text_colour(string $hex): string {
+        $hex = ltrim($hex, '#');
+        $r = hexdec(substr($hex, 0, 2));
+        $g = hexdec(substr($hex, 2, 2));
+        $b = hexdec(substr($hex, 4, 2));
+        $brightness = (($r * 299) + ($g * 587) + ($b * 114)) / 1000;
+
+        return $brightness >= 128 ? '#000000' : '#ffffff';
     }
 
     /**

@@ -64,13 +64,12 @@ $speakers = api::get_speakers($submission->id);
 $fields = api::get_fields($confsubmissions->id);
 $fieldvalues = api::get_optional_field_values($submission->id);
 
-$trackname = null;
+$track = null;
 if (!empty($submission->trackid)) {
     $track = $DB->get_record('confsubmissions_track', [
         'id'              => $submission->trackid,
         'confsubmissions' => $confsubmissions->id,
-    ]);
-    $trackname = $track ? $track->name : null;
+    ]) ?: null;
 }
 
 $callisopen = ($confsubmissions->timeopen == 0 || time() >= $confsubmissions->timeopen)
@@ -80,7 +79,7 @@ $editurl = $canedit
     ? new moodle_url('/mod/confsubmissions/edit.php', ['id' => $cm->id, 'submissionid' => $submission->id])
     : null;
 
-$detail = new submission_detail($submission, $speakers, $fields, $fieldvalues, $trackname, $canedit, $editurl);
+$detail = new submission_detail($submission, $speakers, $fields, $fieldvalues, $track, $canedit, $editurl);
 
 echo $OUTPUT->header();
 echo $OUTPUT->heading(format_string($confsubmissions->name), 2);

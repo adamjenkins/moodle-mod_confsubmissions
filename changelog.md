@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+- Bug fix (2026-07-08): the "All submissions" track filter on `view.php` broke
+  after its first real use -- selecting a specific track and then switching
+  back to "All tracks" silently returned zero rows instead of clearing the
+  filter. Root cause: `$filtertrack` was read via
+  `optional_param('trackid', '', PARAM_INT)`, but `optional_param()` only
+  returns the given default untouched when the parameter is absent from the
+  request entirely; once the GET filter form is submitted, "All tracks"'
+  own empty-string option value *is* present in the querystring, so
+  `PARAM_INT` cleaning runs on it and `(int) ''` is `0`, not `''` --
+  `$filtertrack !== ''` then evaluated `0 !== ''` as true and wrongly added
+  `trackid = 0` to the filter (a value no real submission ever has, since
+  `trackid` is an auto-increment id or null). Fixed by using `0`, not `''`,
+  as the "no filter" sentinel throughout (matching this project's existing
+  "0 = unset" convention for `PARAM_INT` select fields, e.g.
+  `mod_confcheckin`'s `confprogramcmid`/`paymentaccountid`): the default,
+  the "All tracks" option's value, and the filter-applied check all changed
+  together. The status filter (`PARAM_ALPHA`) was not affected -- cleaning
+  `''` through `PARAM_ALPHA` stays `''`.
 - User request (2026-07-07): "Editing teachers should also be able to edit
   any submission (especially the selected track) from the list view."
   Added a new `mod/confsubmissions:editany` capability (granted to
