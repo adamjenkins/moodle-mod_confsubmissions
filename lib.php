@@ -199,6 +199,7 @@ function confsubmissions_delete_instance($id) {
         [$insql, $params] = $DB->get_in_or_equal($submissionids);
         $DB->delete_records_select('confsubmissions_fieldval', "submissionid $insql", $params);
         $DB->delete_records_select('confsubmissions_speaker', "submissionid $insql", $params);
+        $DB->delete_records_select('confsubmissions_datepref', "submissionid $insql", $params);
     }
 
     $DB->delete_records('confsubmissions_submission', ['confsubmissions' => $id]);

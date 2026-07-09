@@ -102,6 +102,21 @@ class field_form extends \moodleform {
             $errors['options'] = get_string('error:invalidfieldoptions', 'mod_confsubmissions');
         }
 
+        // Friendly form-level copy of api::update_field()'s own guard: a field's type
+        // cannot change once answers exist, since stored answers are opaque strings
+        // whose meaning depends on the type they were captured under.
+        $fieldid = (int) ($data['fieldid'] ?? 0);
+        if ($fieldid && !isset($errors['type'])) {
+            global $DB;
+            $existingtype = $DB->get_field('confsubmissions_field', 'type', ['id' => $fieldid]);
+            if (
+                $existingtype !== false && $existingtype !== $type
+                    && $DB->record_exists('confsubmissions_fieldval', ['fieldid' => $fieldid])
+            ) {
+                $errors['type'] = get_string('error:fieldtypechangehasvalues', 'mod_confsubmissions');
+            }
+        }
+
         return $errors;
     }
 }

@@ -2,6 +2,59 @@
 
 ## Unreleased
 
+- Review fixes (2026-07-09, from the four-plugin FABLE.md review — see the
+  coordination repo). All are behaviour fixes; none change any `api.php` method
+  signature (only additive bulk methods are new):
+  - **`confsubmissions_delete_instance()` and `api::delete_submission()` no longer
+    leak `confsubmissions_datepref` rows** — a submitter's preferred-day rows
+    previously survived activity deletion and per-submission hard delete as
+    unreachable orphans. New `test_delete_instance_removes_all_child_rows()`
+    covers every child table.
+  - **`db/upgrade.php` step `2026070206` is now portable SQL** — it used a
+    MySQL-only `UPDATE ... JOIN`, which would have died mid-upgrade on
+    PostgreSQL (a DB family CI claims to support; fresh installs never run
+    upgrade steps, so CI could not catch it). Rewritten as a recordset loop.
+  - **`edit.php`/`dates.php` process their forms before any output** — both
+    echoed the page header before `is_cancelled()`/`get_data()`, so their
+    redirects could degrade to the meta-refresh interstitial and drop the
+    success notification onto the wrong page. A POST against a closed call is
+    still never processed (the guard now runs before the form is built).
+  - **`view.php`'s "All submissions" list no longer runs 2 queries per row** —
+    primary speakers and their user records are fetched in two bulk queries.
+  - **`search_course_users` searches in SQL** — it previously hydrated every
+    enrolled user's full record (including password hash) per autocomplete
+    keystroke and filtered in PHP; now `get_enrolled_sql()` + `sql_like()` on
+    the full name, selecting only id + name fields, capped at 20 rows.
+  - **Withdrawal notifications target a capability, not a role shortname** —
+    recipients are now holders of `mod/confsubmissions:editany` (same default
+    roles as before), replacing a `MUST_EXIST` lookup of the `editingteacher`
+    shortname that fatally broke a submitter's own Withdraw click on any site
+    that renamed that role. Notification subjects also no longer contain
+    HTML entities for names like "D'Arcy" (raw vs HTML-escaped placeholder
+    contexts, escaped exactly once per output format).
+  - **Optional-field labels no longer double-escape** in the submission detail
+    modal ("R&D" rendered as "R&amp;D") — same `escape => false` pattern the
+    template's `title` already used.
+  - **A field's type can no longer change once answers exist**
+    (`api::update_field()` guard + friendly `field_form` validation + new
+    `error:fieldtypechangehasvalues` string) — re-typing a field silently
+    reinterpreted stored answers (e.g. text rendered through `userdate()`).
+  - **`submission.php`'s Edit link now follows `api::can_edit_submission()`** —
+    editany holders get the link the list view already offered; an owner whose
+    `submit` capability was revoked no longer sees a link `edit.php` rejects.
+  - **Pre-2026070800 backups restore their disabled days correctly** — the
+    restore step now converts the old comma-separated `disableddates` format to
+    the JSON shape (it previously parsed silently as "no disabled dates").
+  - **New additive bulk read API** for downstream plugins:
+    `api::get_submissions()`, `get_speakers_for_submissions()`,
+    `get_optional_field_values_for_submissions()`,
+    `get_date_preferences_for_submissions()` — one query each, used by
+    `mod_confprogram`/`mod_confscheduler` to fix their per-row query patterns.
+  - Accessibility: the per-day checkbox/reason controls on `dates.php` now carry
+    aria-labels naming the day; the action columns in both `view.php` tables
+    have visually-hidden "Actions" headers; unescaped `fullname()` sinks in
+    `view.php`/`edit.php` now escape; capability description strings for
+    `managetracks`/`manageform` now describe everything they actually gate.
 - User request (2026-07-09): "Manage disabled preferred days" (`dates.php`) can now
   record a short optional reason alongside each disabled day, shown in parentheses
   next to the greyed-out checkbox on the New/edit submission pages (e.g. "18 August

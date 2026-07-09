@@ -110,7 +110,11 @@ class submission_detail implements renderable, templatable {
             }
 
             $fields[] = [
-                'label' => format_string($field->name),
+                // Escape => false, same as 'value' below: the template outputs both via
+                // {{...}}, so Mustache's own auto-escaping must be the only escape --
+                // format_string()'s default escaping on top rendered a field named
+                // "R&D" as the literal text "R&amp;D".
+                'label' => format_string($field->name, true, ['escape' => false]),
                 'value' => $this->format_field_value($field, $value),
             ];
         }

@@ -169,13 +169,21 @@ function xmldb_confsubmissions_upgrade($oldversion) {
         }
 
         if ($dbman->field_exists($valtable, new xmldb_field('fieldname'))) {
-            $DB->execute(
-                'UPDATE {confsubmissions_fieldval} fv
+            // Portable per-row loop rather than a single UPDATE ... JOIN: that syntax
+            // is MySQL/MariaDB-only (PostgreSQL needs UPDATE ... FROM), and this step
+            // must keep working on every DB family composer.json/ci.yml claim support
+            // for -- released versions exist behind this savepoint.
+            $rs = $DB->get_recordset_sql(
+                'SELECT fv.id AS fieldvalid, f.id AS fieldid
+                   FROM {confsubmissions_fieldval} fv
                    JOIN {confsubmissions_submission} sub ON sub.id = fv.submissionid
                    JOIN {confsubmissions_field} f
-                        ON f.confsubmissions = sub.confsubmissions AND f.fieldname = fv.fieldname
-                    SET fv.fieldid = f.id'
+                        ON f.confsubmissions = sub.confsubmissions AND f.fieldname = fv.fieldname'
             );
+            foreach ($rs as $row) {
+                $DB->set_field('confsubmissions_fieldval', 'fieldid', $row->fieldid, ['id' => $row->fieldvalid]);
+            }
+            $rs->close();
 
             // A value whose field was disabled (and so deleted, above) is orphaned and
             // meaningless without a field to attach to.

@@ -52,19 +52,30 @@ class dates_form extends \moodleform {
         foreach ($conferencedays as $day) {
             $checkboxname = 'disableddates[' . $day . ']';
             $reasonname = 'disabledreasons[' . $day . ']';
+            $daylabel = userdate($day, get_string('strftimedate', 'langconfig'));
 
-            $checkbox = $mform->createElement('advcheckbox', $checkboxname, '');
+            // Both controls carry an aria-label naming the day: the group's visible
+            // label is not programmatically associated with either element, and a
+            // placeholder is not a label (WCAG 3.3.2), so without these a screen
+            // reader announces two unnamed controls per day.
+            $checkbox = $mform->createElement('advcheckbox', $checkboxname, '', '', [
+                'aria-label' => get_string('disabledaycheckbox', 'mod_confsubmissions', $daylabel),
+            ]);
             $reason = $mform->createElement(
                 'text',
                 $reasonname,
                 '',
-                ['size' => 30, 'placeholder' => get_string('disableddatereason', 'mod_confsubmissions')]
+                [
+                    'size' => 30,
+                    'placeholder' => get_string('disableddatereason', 'mod_confsubmissions'),
+                    'aria-label' => get_string('disableddatereasonfor', 'mod_confsubmissions', $daylabel),
+                ]
             );
 
             $mform->addGroup(
                 [$checkbox, $reason],
                 'disabledgroup[' . $day . ']',
-                userdate($day, get_string('strftimedate', 'langconfig')),
+                $daylabel,
                 ' ',
                 false
             );

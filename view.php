@@ -245,7 +245,7 @@ if ($canviewown) {
             get_string('track', 'mod_confsubmissions'),
             get_string('status', 'mod_confsubmissions'),
             get_string('lastmodified', 'mod_confsubmissions'),
-            '',
+            html_writer::span(get_string('actions'), 'sr-only'),
         ];
         $table->attributes['class'] = 'generaltable';
 
@@ -330,23 +330,43 @@ if ($canviewall) {
             get_string('submitted', 'mod_confsubmissions'),
         ];
         if ($caneditany) {
-            $table->head[] = '';
+            $table->head[] = html_writer::span(get_string('actions'), 'sr-only');
         }
         if ($candeleteany) {
-            $table->head[] = '';
+            $table->head[] = html_writer::span(get_string('actions'), 'sr-only');
         }
         $table->attributes['class'] = 'generaltable';
 
+        // Primary speakers and their user records are fetched in two bulk queries
+        // rather than two queries per row -- this listing has no pagination, so a
+        // large conference would otherwise pay ~2N queries per page view.
+        [$insql, $inparams] = $DB->get_in_or_equal(array_keys($all));
+        $primaries = [];
+        foreach (
+            $DB->get_records_select(
+                'confsubmissions_speaker',
+                "role = 'primary' AND submissionid $insql",
+                $inparams
+            ) as $speaker
+        ) {
+            $primaries[(int) $speaker->submissionid] = $speaker;
+        }
+        $primaryuserids = array_filter(array_map(
+            static fn($speaker) => (int) $speaker->userid,
+            $primaries
+        ));
+        $namefields = implode(', ', array_merge(['id'], \core_user\fields::for_name()->get_required_fields()));
+        $primaryusers = $primaryuserids
+            ? $DB->get_records_list('user', 'id', $primaryuserids, '', $namefields)
+            : [];
+
         foreach ($all as $submission) {
-            $primary = $DB->get_record('confsubmissions_speaker', [
-                'submissionid' => $submission->id,
-                'role' => 'primary',
-            ]);
+            $primary = $primaries[(int) $submission->id] ?? null;
             $primaryname = '-';
             if ($primary) {
                 if (!empty($primary->userid)) {
-                    $primaryuser = \core_user::get_user($primary->userid);
-                    $primaryname = $primaryuser ? fullname($primaryuser) : '-';
+                    $primaryuser = $primaryusers[(int) $primary->userid] ?? null;
+                    $primaryname = $primaryuser ? s(fullname($primaryuser)) : '-';
                 } else if (!empty($primary->name)) {
                     $primaryname = format_string($primary->name);
                 }

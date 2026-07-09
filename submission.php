@@ -74,7 +74,12 @@ if (!empty($submission->trackid)) {
 
 $callisopen = ($confsubmissions->timeopen == 0 || time() >= $confsubmissions->timeopen)
     && ($confsubmissions->timeclose == 0 || time() < $confsubmissions->timeclose);
-$canedit = $isowner && $callisopen;
+// Same rule edit.php itself enforces: an owner may edit while the call is open;
+// an editany holder may edit regardless of the call window. Previously this was
+// "$isowner && $callisopen", which hid the Edit link from editany holders (the
+// list view offered it) and showed it to owners whose :submit had been revoked.
+$iseditanyhere = !$isowner && has_capability('mod/confsubmissions:editany', $context);
+$canedit = api::can_edit_submission($submission, $context) && ($callisopen || $iseditanyhere);
 $editurl = $canedit
     ? new moodle_url('/mod/confsubmissions/edit.php', ['id' => $cm->id, 'submissionid' => $submission->id])
     : null;

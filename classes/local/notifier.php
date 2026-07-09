@@ -141,17 +141,23 @@ class notifier {
                 continue;
             }
 
-            $context = [
-                'fullname'        => format_string(fullname($touser)),
-                'submissiontitle' => format_string($submission->title),
-                'coursename'      => format_string($course->fullname),
+            // Two placeholder contexts: raw (filtered but unescaped) for the plain-text
+            // subject and any FORMAT_PLAIN body -- both get escaped exactly once at
+            // their own output boundary -- and an HTML-escaped one for a FORMAT_HTML
+            // body, which is sent verbatim as fullmessagehtml. Substituting escaped
+            // values everywhere put literal entities ("D&#39;Arcy") in subjects.
+            $rawcontext = [
+                'fullname'        => format_string(fullname($touser), true, ['escape' => false]),
+                'submissiontitle' => format_string($submission->title, true, ['escape' => false]),
+                'coursename'      => format_string($course->fullname, true, ['escape' => false]),
             ];
+            $bodycontext = $template['bodyformat'] === FORMAT_HTML ? array_map('s', $rawcontext) : $rawcontext;
 
             self::send(
                 $touser,
                 'submissioncreated',
-                self::render($template['subject'], $context),
-                self::render($template['body'], $context),
+                self::render($template['subject'], $rawcontext),
+                self::render($template['body'], $bodycontext),
                 $template['bodyformat'],
                 (int) $confsubmissions->course
             );
@@ -159,8 +165,9 @@ class notifier {
     }
 
     /**
-     * Notifies every user holding the editingteacher role in the submission's own
-     * course that it has been withdrawn -- NOT the speakers themselves, per the
+     * Notifies every organiser (holders of mod/confsubmissions:editany --
+     * editingteachers and managers by default) in the submission's own activity
+     * that it has been withdrawn -- NOT the speakers themselves, per the
      * explicit request.
      *
      * @param int $submissionid The confsubmissions_submission id
@@ -182,25 +189,37 @@ class notifier {
         $course = get_course((int) $confsubmissions->course);
         $submitter = \core_user::get_user((int) $submission->userid);
 
-        $context = [
-            'submissiontitle'   => format_string($submission->title),
-            'submitterfullname' => $submitter ? format_string(fullname($submitter)) : '',
-            'coursename'        => format_string($course->fullname),
+        // Raw vs HTML-escaped contexts: see notify_submission_created()'s comment.
+        $rawcontext = [
+            'submissiontitle'   => format_string($submission->title, true, ['escape' => false]),
+            'submitterfullname' => $submitter ? format_string(fullname($submitter), true, ['escape' => false]) : '',
+            'coursename'        => format_string($course->fullname, true, ['escape' => false]),
         ];
+        $bodycontext = $template['bodyformat'] === FORMAT_HTML ? array_map('s', $rawcontext) : $rawcontext;
 
-        $coursecontext = \context_course::instance((int) $confsubmissions->course);
-        $editingteachers = get_role_users(
-            (int) $DB->get_field('role', 'id', ['shortname' => 'editingteacher'], MUST_EXIST),
-            $coursecontext
-        );
+        // Recipients are resolved by capability, not by the 'editingteacher' role
+        // shortname: a site that renamed or removed that role would previously hit
+        // the get_field() MUST_EXIST exception here -- fatal to the submitter's own
+        // Withdraw action, since it propagated out of api::set_status() AFTER the
+        // status write. mod/confsubmissions:editany is held by the editingteacher
+        // and manager archetypes (db/access.php), so the default-role behaviour is
+        // unchanged, and custom organiser roles granted that capability are now
+        // included too. Checked against the module's own context so module-level
+        // role overrides are respected.
+        $cm = get_coursemodule_from_instance('confsubmissions', (int) $confsubmissions->id, 0, false, IGNORE_MISSING);
+        if (!$cm) {
+            return;
+        }
+        $modulecontext = \context_module::instance($cm->id);
+        $organisers = get_users_by_capability($modulecontext, 'mod/confsubmissions:editany', 'u.id');
 
-        foreach ($editingteachers as $roleuser) {
-            // Role users come back as trimmed-down objects (only the fields
-            // get_role_users()'s own SQL selects), not a full user record --
-            // message_send() needs the latter (it otherwise re-fetches the full
-            // record itself, but not before
-            // triggering a "Necessary properties missing" debugging() notice).
-            $touser = \core_user::get_user((int) $roleuser->id);
+        foreach ($organisers as $organiser) {
+            // Capability users come back as trimmed-down objects (only the fields
+            // the query selects), not a full user record -- message_send() needs
+            // the latter (it otherwise re-fetches the full record itself, but not
+            // before triggering a "Necessary properties missing" debugging()
+            // notice).
+            $touser = \core_user::get_user((int) $organiser->id);
             if (!$touser || $touser->deleted) {
                 continue;
             }
@@ -208,8 +227,8 @@ class notifier {
             self::send(
                 $touser,
                 'submissionwithdrawn',
-                self::render($template['subject'], $context),
-                self::render($template['body'], $context),
+                self::render($template['subject'], $rawcontext),
+                self::render($template['body'], $bodycontext),
                 $template['bodyformat'],
                 (int) $confsubmissions->course
             );

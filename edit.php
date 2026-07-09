@@ -89,26 +89,10 @@ $PAGE->set_title(format_string($confsubmissions->name));
 $PAGE->set_heading(format_string($course->fullname));
 $PAGE->set_context($context);
 
-echo $OUTPUT->header();
-echo $OUTPUT->heading(format_string($confsubmissions->name), 2);
-echo $OUTPUT->heading(
-    $submission ? get_string('editsubmission', 'mod_confsubmissions') : get_string('newsubmission', 'mod_confsubmissions'),
-    3
-);
-
-if ($iseditany) {
-    $owneruser = \core_user::get_user($submission->userid);
-    echo $OUTPUT->notification(
-        get_string('editinganothersubmission', 'mod_confsubmissions', $owneruser ? fullname($owneruser) : '-'),
-        'info'
-    );
-}
-
-if (!$callisopen && !$iseditany) {
-    echo $OUTPUT->notification(get_string('callnotopen', 'mod_confsubmissions'), 'info');
-    echo $OUTPUT->footer();
-    exit;
-}
+// Whether this request may reach the form at all: a closed call blocks everyone
+// except an editany holder editing someone else's submission. Checked before the
+// form is even built so a POST against a closed call is never processed.
+$callclosed = !$callisopen && !$iseditany;
 
 $customdata = [
     'cmid'            => $cm->id,
@@ -119,9 +103,10 @@ $customdata = [
 if ($submission) {
     $customdata['preferreddates'] = api::get_date_preferences($submission->id);
 }
-$mform = new submission_form($pageurl, $customdata);
 
-if ($submission) {
+$mform = $callclosed ? null : new submission_form($pageurl, $customdata);
+
+if ($mform && $submission) {
     $fields = api::get_fields($confsubmissions->id);
     $fieldvalues = api::get_optional_field_values($submission->id);
 
@@ -174,9 +159,13 @@ if ($submission) {
     $mform->set_data($formdata);
 }
 
-if ($mform->is_cancelled()) {
+// Form processing runs BEFORE any output so redirect() sends a clean 303 (a
+// header already echoed would degrade it to the meta-refresh interstitial and
+// misplace the success notification) -- every other page in this plugin already
+// processes-then-renders in this order.
+if ($mform && $mform->is_cancelled()) {
     redirect($viewurl);
-} else if ($data = $mform->get_data()) {
+} else if ($mform && ($data = $mform->get_data())) {
     $now = time();
 
     $record = (object) [
@@ -226,6 +215,27 @@ if ($mform->is_cancelled()) {
     }
 
     redirect($viewurl, get_string('submissionsaved', 'mod_confsubmissions'), null, \core\output\notification::NOTIFY_SUCCESS);
+}
+
+echo $OUTPUT->header();
+echo $OUTPUT->heading(format_string($confsubmissions->name), 2);
+echo $OUTPUT->heading(
+    $submission ? get_string('editsubmission', 'mod_confsubmissions') : get_string('newsubmission', 'mod_confsubmissions'),
+    3
+);
+
+if ($callclosed) {
+    echo $OUTPUT->notification(get_string('callnotopen', 'mod_confsubmissions'), 'info');
+    echo $OUTPUT->footer();
+    exit;
+}
+
+if ($iseditany) {
+    $owneruser = \core_user::get_user($submission->userid);
+    echo $OUTPUT->notification(
+        get_string('editinganothersubmission', 'mod_confsubmissions', $owneruser ? s(fullname($owneruser)) : '-'),
+        'info'
+    );
 }
 
 // Formslib auto-generates an id="id_<name>" attribute for every element, so

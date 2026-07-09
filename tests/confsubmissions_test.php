@@ -126,4 +126,59 @@ final class confsubmissions_test extends advanced_testcase {
         $this->assertFalse($DB->record_exists('confsubmissions_speaker', ['submissionid' => $submissionid]));
         $this->assertTrue($DB->record_exists('confsubmissions_track', ['id' => $trackid]));
     }
+
+    /**
+     * confsubmissions_delete_instance() empties every child table for the instance --
+     * including confsubmissions_datepref, which it previously leaked (a submitter's
+     * preferred-day rows survived activity deletion as unreachable orphans; found
+     * by the 2026-07-09 review, FABLE.md confsubmissions H1).
+     */
+    public function test_delete_instance_removes_all_child_rows(): void {
+        $this->resetAfterTest();
+        global $CFG, $DB;
+        require_once($CFG->dirroot . '/mod/confsubmissions/lib.php');
+
+        $course = $this->getDataGenerator()->create_course();
+        $confsubmissions = $this->getDataGenerator()->create_module('confsubmissions', ['course' => $course->id]);
+        $instanceid = (int) $confsubmissions->id;
+
+        $trackid = api::add_track($instanceid, 'Security');
+        $fieldid = api::add_field($instanceid, 'Notes', 'text', null, false);
+        api::add_submission_type($instanceid, 'Long talk', 45);
+
+        $speaker = $this->getDataGenerator()->create_user();
+        $now = time();
+        $submissionid = (int) $DB->insert_record('confsubmissions_submission', (object) [
+            'confsubmissions' => $instanceid,
+            'userid'          => $speaker->id,
+            'title'           => 'A Test Talk',
+            'abstract'        => 'Abstract text',
+            'trackid'         => $trackid,
+            'status'          => 'submitted',
+            'timecreated'     => $now,
+            'timemodified'    => $now,
+        ]);
+        api::sync_speakers($submissionid, [['userid' => $speaker->id]]);
+        api::sync_optional_fields($submissionid, [$fieldid => 'an answer']);
+        api::sync_date_preferences($submissionid, [$now]);
+        $DB->insert_record('confsubmissions_notiftemplate', (object) [
+            'confsubmissions' => $instanceid,
+            'notiftype'       => 'created',
+            'subject'         => 'S',
+            'body'            => 'B',
+            'bodyformat'      => FORMAT_HTML,
+        ]);
+
+        $this->assertTrue(confsubmissions_delete_instance($instanceid));
+
+        $this->assertFalse($DB->record_exists('confsubmissions', ['id' => $instanceid]));
+        $this->assertFalse($DB->record_exists('confsubmissions_submission', ['confsubmissions' => $instanceid]));
+        $this->assertFalse($DB->record_exists('confsubmissions_speaker', ['submissionid' => $submissionid]));
+        $this->assertFalse($DB->record_exists('confsubmissions_fieldval', ['submissionid' => $submissionid]));
+        $this->assertFalse($DB->record_exists('confsubmissions_datepref', ['submissionid' => $submissionid]));
+        $this->assertFalse($DB->record_exists('confsubmissions_field', ['confsubmissions' => $instanceid]));
+        $this->assertFalse($DB->record_exists('confsubmissions_track', ['confsubmissions' => $instanceid]));
+        $this->assertFalse($DB->record_exists('confsubmissions_submissiontype', ['confsubmissions' => $instanceid]));
+        $this->assertFalse($DB->record_exists('confsubmissions_notiftemplate', ['confsubmissions' => $instanceid]));
+    }
 }

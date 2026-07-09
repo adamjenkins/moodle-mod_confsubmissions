@@ -552,4 +552,111 @@ final class api_test extends advanced_testcase {
         $this->assertSame('submitted', $submission->status);
         $this->assertGreaterThan($originaltimemodified, $submission->timemodified);
     }
+
+    /**
+     * The bulk read accessors (get_submissions, get_speakers_for_submissions,
+     * get_optional_field_values_for_submissions, get_date_preferences_for_submissions,
+     * added 2026-07-09 for downstream list decoration) return the same data as their
+     * one-at-a-time counterparts, include every requested id in the per-submission
+     * maps, and tolerate missing ids and empty input.
+     */
+    public function test_bulk_read_accessors(): void {
+        $this->resetAfterTest();
+        global $DB;
+
+        $confsubmissions = $this->create_instance();
+
+        $submissionids = [];
+        foreach (['One', 'Two'] as $title) {
+            $submissionids[] = (int) $DB->insert_record('confsubmissions_submission', (object) [
+                'confsubmissions' => $confsubmissions->id,
+                'userid'          => 2,
+                'title'           => $title,
+                'abstract'        => 'Abstract',
+                'status'          => 'submitted',
+                'timecreated'     => time(),
+                'timemodified'    => time(),
+            ]);
+        }
+        [$first, $second] = $submissionids;
+
+        api::sync_speakers($first, [
+            ['name' => 'Speaker A', 'email' => 'a@example.com'],
+            ['name' => 'Speaker B', 'email' => 'b@example.com'],
+        ]);
+        $fieldid = api::add_field($confsubmissions->id, 'Bulk field', 'text', null, false);
+        api::sync_optional_fields($first, [$fieldid => 'answer one']);
+        api::sync_date_preferences($first, [1000000, 2000000]);
+
+        // Empty input: empty output.
+        $this->assertSame([], api::get_submissions([]));
+        $this->assertSame([], api::get_speakers_for_submissions([]));
+        $this->assertSame([], api::get_optional_field_values_for_submissions([]));
+        $this->assertSame([], api::get_date_preferences_for_submissions([]));
+
+        // A missing id is omitted from get_submissions() but present-as-empty in
+        // the per-submission maps.
+        $missingid = $second + 1000;
+        $requested = [$first, $second, $missingid];
+
+        $submissions = api::get_submissions($requested);
+        $this->assertCount(2, $submissions);
+        $this->assertSame('One', $submissions[$first]->title);
+        $this->assertArrayNotHasKey($missingid, $submissions);
+
+        $speakers = api::get_speakers_for_submissions($requested);
+        $this->assertCount(2, $speakers[$first]);
+        $this->assertSame('Speaker A', reset($speakers[$first])->name);
+        $this->assertSame([], $speakers[$second]);
+        $this->assertSame([], $speakers[$missingid]);
+        // Same rows, same order, as the singular accessor.
+        $this->assertEquals(array_values(api::get_speakers($first)), array_values($speakers[$first]));
+
+        $values = api::get_optional_field_values_for_submissions($requested);
+        $this->assertSame(['answer one'], array_values($values[$first]));
+        $this->assertSame([], $values[$second]);
+        $this->assertEquals(api::get_optional_field_values($first), $values[$first]);
+
+        $prefs = api::get_date_preferences_for_submissions($requested);
+        $this->assertSame([1000000, 2000000], $prefs[$first]);
+        $this->assertSame([], $prefs[$second]);
+        $this->assertSame(api::get_date_preferences($first), $prefs[$first]);
+    }
+
+    /**
+     * update_field() refuses to change a field's TYPE once answers exist for it
+     * (stored answers are opaque strings whose meaning depends on the type they
+     * were captured under), while still allowing name/required edits and type
+     * changes on an unanswered field.
+     */
+    public function test_update_field_type_change_blocked_once_answered(): void {
+        $this->resetAfterTest();
+        global $DB;
+
+        $confsubmissions = $this->create_instance();
+        $fieldid = api::add_field($confsubmissions->id, 'Notes', 'text', null, false);
+
+        // No answers yet: a type change is fine.
+        api::update_field($fieldid, 'Notes', 'textarea', null, false);
+        $this->assertSame('textarea', $DB->get_field('confsubmissions_field', 'type', ['id' => $fieldid]));
+
+        $submissionid = $DB->insert_record('confsubmissions_submission', (object) [
+            'confsubmissions' => $confsubmissions->id,
+            'userid'          => 2,
+            'title'           => 'Test submission',
+            'abstract'        => 'Abstract',
+            'status'          => 'submitted',
+            'timecreated'     => time(),
+            'timemodified'    => time(),
+        ]);
+        api::sync_optional_fields($submissionid, [$fieldid => 'some text']);
+
+        // Same type: still editable.
+        api::update_field($fieldid, 'Notes (renamed)', 'textarea', null, true);
+        $this->assertSame('Notes (renamed)', $DB->get_field('confsubmissions_field', 'name', ['id' => $fieldid]));
+
+        // Different type with answers: rejected.
+        $this->expectException(\invalid_parameter_exception::class);
+        api::update_field($fieldid, 'Notes', 'date', null, false);
+    }
 }

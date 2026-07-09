@@ -90,12 +90,27 @@ class restore_confsubmissions_activity_structure_step extends restore_activity_s
         $data->timeclose = $this->apply_date_offset($data->timeclose);
         $data->conferencestart = $this->apply_date_offset($data->conferencestart);
         $data->conferenceend = $this->apply_date_offset($data->conferenceend);
-        // Disableddates (a comma-separated list of timestamps embedded in a text field,
-        // not a single column) is deliberately NOT date-offset here -- unlike the plain
-        // timestamp columns above, shifting embedded values inside a text blob is not a
-        // pattern any core activity does either; a restored instance keeps its original
-        // disabled-day timestamps, which may now fall outside its (offset) conference
-        // date range and simply have no effect until an organiser revisits the setting.
+        // Disableddates (a JSON array of {date, reason} objects embedded in a text
+        // field since version 2026070800 -- previously a comma-separated timestamp
+        // list) is deliberately NOT date-offset here -- unlike the plain timestamp
+        // columns above, shifting embedded values inside a text blob is not a
+        // pattern any core activity does either; a restored instance keeps its
+        // original disabled-day timestamps, which may now fall outside its (offset)
+        // conference date range and simply have no effect until an organiser
+        // revisits the setting.
+        //
+        // A backup made by a pre-2026070800 version carries the OLD comma-separated
+        // format, which current code silently parses as "no disabled dates" -- so it
+        // is normalised to the JSON shape here, reusing the exact conversion the
+        // db/upgrade.php 2026070800 step applies to in-place data.
+        $trimmeddisabled = trim((string) ($data->disableddates ?? ''));
+        if ($trimmeddisabled !== '' && $trimmeddisabled[0] !== '[') {
+            $olddates = array_map('intval', array_filter(explode(',', $trimmeddisabled), 'strlen'));
+            $data->disableddates = json_encode(array_map(
+                static fn(int $date): array => ['date' => $date, 'reason' => ''],
+                $olddates
+            ));
+        }
 
         $newitemid = $DB->insert_record('confsubmissions', $data);
         $this->apply_activity_instance($newitemid);

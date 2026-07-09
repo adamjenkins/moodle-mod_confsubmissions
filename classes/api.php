@@ -54,6 +54,31 @@ class api {
     }
 
     /**
+     * Returns many submission records in one query, keyed by id.
+     *
+     * Bulk companion to get_submission(), added (2026-07-09) so downstream
+     * consumers that decorate whole lists (mod_confprogram's Display-phase list,
+     * mod_confscheduler's grid payload) don't have to issue one query per row.
+     * A requested id with no matching record is simply absent from the result --
+     * callers must tolerate that the same way they tolerate get_submission()
+     * returning false.
+     *
+     * @param int[] $submissionids The confsubmissions_submission ids
+     * @return \stdClass[] Submission records keyed by id (missing ids omitted)
+     */
+    public static function get_submissions(array $submissionids): array {
+        global $DB;
+
+        $submissionids = array_values(array_unique(array_map('intval', $submissionids)));
+        if (!$submissionids) {
+            return [];
+        }
+
+        [$insql, $params] = $DB->get_in_or_equal($submissionids);
+        return $DB->get_records_select('confsubmissions_submission', "id $insql", $params);
+    }
+
+    /**
      * Whether $userid may edit $submission via edit.php: either they own it and
      * hold mod/confsubmissions:submit, or they hold mod/confsubmissions:editany
      * regardless of ownership (user request, 2026-07-07 -- "editing teachers should
@@ -140,6 +165,7 @@ class api {
 
         $DB->delete_records('confsubmissions_speaker', ['submissionid' => $submissionid]);
         $DB->delete_records('confsubmissions_fieldval', ['submissionid' => $submissionid]);
+        $DB->delete_records('confsubmissions_datepref', ['submissionid' => $submissionid]);
         $DB->delete_records('confsubmissions_submission', ['id' => $submissionid]);
     }
 
@@ -230,6 +256,40 @@ class api {
     }
 
     /**
+     * Returns the speakers for many submissions in one query.
+     *
+     * Bulk companion to get_speakers(), added (2026-07-09) for the same
+     * list-decoration consumers as get_submissions() above. Every requested id
+     * is present in the result (as an empty array when the submission has no
+     * speakers), so callers can index without isset() checks.
+     *
+     * @param int[] $submissionids The confsubmissions_submission ids
+     * @return array Map of submissionid => speaker records in sort order
+     */
+    public static function get_speakers_for_submissions(array $submissionids): array {
+        global $DB;
+
+        $submissionids = array_values(array_unique(array_map('intval', $submissionids)));
+        if (!$submissionids) {
+            return [];
+        }
+
+        $result = array_fill_keys($submissionids, []);
+        [$insql, $params] = $DB->get_in_or_equal($submissionids);
+        $speakers = $DB->get_records_select(
+            'confsubmissions_speaker',
+            "submissionid $insql",
+            $params,
+            'submissionid ASC, sortorder ASC'
+        );
+        foreach ($speakers as $speaker) {
+            $result[(int) $speaker->submissionid][] = $speaker;
+        }
+
+        return $result;
+    }
+
+    /**
      * Validates that a colour is either null or a 6-digit hex colour (e.g. #3366cc),
      * the same convention used by mod_confscheduler's confscheduler_room.colour.
      *
@@ -302,6 +362,35 @@ class api {
             '',
             'fieldid, value'
         );
+    }
+
+    /**
+     * Returns the optional-field answers for many submissions in one query.
+     *
+     * Bulk companion to get_optional_field_values(), added (2026-07-09) for
+     * list-decoration consumers (see get_submissions() above). Every requested
+     * id is present in the result (as an empty array when the submission has
+     * no answers).
+     *
+     * @param int[] $submissionids The confsubmissions_submission ids
+     * @return array Map of submissionid => (fieldid => value)
+     */
+    public static function get_optional_field_values_for_submissions(array $submissionids): array {
+        global $DB;
+
+        $submissionids = array_values(array_unique(array_map('intval', $submissionids)));
+        if (!$submissionids) {
+            return [];
+        }
+
+        $result = array_fill_keys($submissionids, []);
+        [$insql, $params] = $DB->get_in_or_equal($submissionids);
+        $values = $DB->get_records_select('confsubmissions_fieldval', "submissionid $insql", $params);
+        foreach ($values as $value) {
+            $result[(int) $value->submissionid][(int) $value->fieldid] = $value->value;
+        }
+
+        return $result;
     }
 
     /**
@@ -639,6 +728,40 @@ class api {
     }
 
     /**
+     * Returns the preferred-day timestamps for many submissions in one query.
+     *
+     * Bulk companion to get_date_preferences(), added (2026-07-09) for
+     * mod_confscheduler's grid payload (see get_submissions() above). Every
+     * requested id is present in the result; an empty array carries the same
+     * "any day is acceptable" meaning documented on get_date_preferences().
+     *
+     * @param int[] $submissionids The confsubmissions_submission ids
+     * @return array Map of submissionid => int[] preferred-day midnight timestamps
+     */
+    public static function get_date_preferences_for_submissions(array $submissionids): array {
+        global $DB;
+
+        $submissionids = array_values(array_unique(array_map('intval', $submissionids)));
+        if (!$submissionids) {
+            return [];
+        }
+
+        $result = array_fill_keys($submissionids, []);
+        [$insql, $params] = $DB->get_in_or_equal($submissionids);
+        $prefs = $DB->get_records_select(
+            'confsubmissions_datepref',
+            "submissionid $insql",
+            $params,
+            'submissionid ASC, prefdate ASC'
+        );
+        foreach ($prefs as $pref) {
+            $result[(int) $pref->submissionid][] = (int) $pref->prefdate;
+        }
+
+        return $result;
+    }
+
+    /**
      * Replaces a submission's preferred conference days with a new set.
      *
      * @param int $submissionid The confsubmissions_submission id
@@ -832,13 +955,20 @@ class api {
      * Updates an optional field's name, type, options and required flag in place
      * (sortorder is untouched).
      *
+     * A field's TYPE can only change while it has no stored answers: an answer is
+     * stored as an opaque string whose meaning depends on the type it was captured
+     * under (a 'date' answer is a unix timestamp, a 'checkbox' answer is '0'/'1'),
+     * so re-typing a field with live data silently reinterprets every existing
+     * answer -- e.g. text answers rendered through userdate() as the epoch.
+     *
      * @param int $fieldid The confsubmissions_field id
      * @param string $name The field's display label
      * @param string $type One of confsubmissions_field_types()
      * @param string|null $options Newline-separated choices; only meaningful when $type is 'menu'
      * @param bool $required Whether a presenter must answer this field
      * @return void
-     * @throws \invalid_parameter_exception if $type is invalid, or $type is 'menu' with no choices
+     * @throws \invalid_parameter_exception if $type is invalid, $type is 'menu' with no choices,
+     *         or $type differs from the stored type while answers exist for the field
      */
     public static function update_field(int $fieldid, string $name, string $type, ?string $options, bool $required): void {
         global $DB;
@@ -846,6 +976,16 @@ class api {
         self::validate_field_type($type);
         if ($type === 'menu') {
             self::validate_field_menu_options($options);
+        }
+
+        $existing = $DB->get_record('confsubmissions_field', ['id' => $fieldid], '*', MUST_EXIST);
+        if (
+            $existing->type !== $type
+                && $DB->record_exists('confsubmissions_fieldval', ['fieldid' => $fieldid])
+        ) {
+            throw new \invalid_parameter_exception(
+                get_string('error:fieldtypechangehasvalues', 'mod_confsubmissions')
+            );
         }
 
         $DB->update_record('confsubmissions_field', (object) [

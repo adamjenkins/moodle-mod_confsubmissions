@@ -52,46 +52,56 @@ $PAGE->set_context($context);
 
 $conferencedays = api::get_conference_days($confsubmissions);
 
+// Form construction and processing run BEFORE any output so redirect() sends a
+// clean 303 -- see edit.php's matching comment.
+$datesform = null;
+if ($conferencedays) {
+    $datesform = new dates_form($pageurl, ['conferencedays' => $conferencedays]);
+
+    $disableddates = api::get_disabled_dates($confsubmissions);
+    $disabledreasons = api::get_disabled_date_reasons($confsubmissions);
+    $existing = [];
+    $existingreasons = [];
+    foreach ($conferencedays as $day) {
+        $existing[$day] = in_array($day, $disableddates, true) ? 1 : 0;
+        $existingreasons[$day] = $disabledreasons[$day] ?? '';
+    }
+    $datesform->set_data((object) ['disableddates' => $existing, 'disabledreasons' => $existingreasons]);
+
+    if ($datesform->is_cancelled()) {
+        redirect(new moodle_url('/mod/confsubmissions/view.php', ['id' => $cm->id]));
+    } else if ($formdata = $datesform->get_data()) {
+        // A reason is only ever persisted alongside a day that is actually being
+        // disabled -- typing a reason next to an unchecked day (or leaving a stale
+        // one from before it was re-enabled) is silently discarded rather than kept
+        // around unused.
+        $datestoreasons = [];
+        foreach ($conferencedays as $day) {
+            if (!empty($formdata->disableddates[$day] ?? null)) {
+                $datestoreasons[$day] = trim((string) ($formdata->disabledreasons[$day] ?? ''));
+            }
+        }
+        api::set_disabled_dates($confsubmissions->id, $datestoreasons);
+        redirect(
+            $pageurl,
+            get_string('disableddatessaved', 'mod_confsubmissions'),
+            null,
+            \core\output\notification::NOTIFY_SUCCESS
+        );
+    }
+}
+
 echo $OUTPUT->header();
 echo $OUTPUT->heading(format_string($confsubmissions->name), 2);
 echo $OUTPUT->heading(get_string('managedisableddates', 'mod_confsubmissions'), 3);
 
-if (!$conferencedays) {
+if (!$datesform) {
     echo $OUTPUT->notification(get_string('nodisableddatesconferencedates', 'mod_confsubmissions'), 'info');
     echo $OUTPUT->footer();
     exit;
 }
 
 echo html_writer::tag('p', get_string('managedisableddates_help', 'mod_confsubmissions'));
-
-$datesform = new dates_form($pageurl, ['conferencedays' => $conferencedays]);
-
-$disableddates = api::get_disabled_dates($confsubmissions);
-$disabledreasons = api::get_disabled_date_reasons($confsubmissions);
-$existing = [];
-$existingreasons = [];
-foreach ($conferencedays as $day) {
-    $existing[$day] = in_array($day, $disableddates, true) ? 1 : 0;
-    $existingreasons[$day] = $disabledreasons[$day] ?? '';
-}
-$datesform->set_data((object) ['disableddates' => $existing, 'disabledreasons' => $existingreasons]);
-
-if ($datesform->is_cancelled()) {
-    redirect(new moodle_url('/mod/confsubmissions/view.php', ['id' => $cm->id]));
-} else if ($formdata = $datesform->get_data()) {
-    // A reason is only ever persisted alongside a day that is actually being
-    // disabled -- typing a reason next to an unchecked day (or leaving a stale
-    // one from before it was re-enabled) is silently discarded rather than kept
-    // around unused.
-    $datestoreasons = [];
-    foreach ($conferencedays as $day) {
-        if (!empty($formdata->disableddates[$day] ?? null)) {
-            $datestoreasons[$day] = trim((string) ($formdata->disabledreasons[$day] ?? ''));
-        }
-    }
-    api::set_disabled_dates($confsubmissions->id, $datestoreasons);
-    redirect($pageurl, get_string('disableddatessaved', 'mod_confsubmissions'), null, \core\output\notification::NOTIFY_SUCCESS);
-}
 
 $datesform->display();
 

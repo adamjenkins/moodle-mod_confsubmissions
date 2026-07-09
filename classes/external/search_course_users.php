@@ -76,24 +76,37 @@ class search_course_users extends external_api {
             require_capability('mod/confsubmissions:submit', $context);
         }
 
-        $enrolled = get_enrolled_users($context, '', 0, 'u.*', 'u.lastname, u.firstname');
+        global $DB;
 
-        $query = \core_text::strtolower(trim($params['query']));
+        // The name match runs in SQL, selecting only id + name fields and capped at
+        // MAX_RESULTS rows -- fetching every enrolled user's full record and
+        // filtering in PHP made each autocomplete keystroke hydrate the whole
+        // course enrolment (u.* includes the password hash) on large sites.
+        [$enrolsql, $enrolparams] = get_enrolled_sql($context);
+        $namefields = implode(', ', array_map(
+            static fn(string $field): string => 'u.' . $field,
+            array_merge(['id'], \core_user\fields::for_name()->get_required_fields())
+        ));
+
+        $query = trim($params['query']);
+        $wheres = ['u.deleted = 0'];
+        $sqlparams = $enrolparams;
+        if ($query !== '') {
+            $wheres[] = $DB->sql_like($DB->sql_fullname('u.firstname', 'u.lastname'), ':search', false);
+            $sqlparams['search'] = '%' . $DB->sql_like_escape($query) . '%';
+        }
+
+        $sql = "SELECT $namefields
+                  FROM {user} u
+                  JOIN ($enrolsql) eu ON eu.id = u.id
+                 WHERE " . implode(' AND ', $wheres) . '
+              ORDER BY u.lastname, u.firstname';
+
         $viewfullnames = has_capability('moodle/site:viewfullnames', $context);
 
         $results = [];
-        foreach ($enrolled as $user) {
-            $fullname = fullname($user, $viewfullnames);
-
-            if ($query !== '' && \core_text::strpos(\core_text::strtolower($fullname), $query) === false) {
-                continue;
-            }
-
-            $results[] = ['id' => (int) $user->id, 'fullname' => $fullname];
-
-            if (count($results) >= self::MAX_RESULTS) {
-                break;
-            }
+        foreach ($DB->get_records_sql($sql, $sqlparams, 0, self::MAX_RESULTS) as $user) {
+            $results[] = ['id' => (int) $user->id, 'fullname' => fullname($user, $viewfullnames)];
         }
 
         return $results;
