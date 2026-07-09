@@ -239,17 +239,20 @@ if ($iseditany) {
 }
 
 // Formslib auto-generates an id="id_<name>" attribute for every element, so
-// 'id_title' and 'id_abstract' are the title/abstract fields' DOM ids.
+// 'id_title' and 'id_abstract' are the title/abstract fields' DOM ids. Each
+// field independently may have a word limit, a character limit, both, or
+// neither (user request, 2026-07-09) -- the live counter is skipped entirely
+// only when both are 0 (unlimited) for that field.
 $countedfields = [
-    'title'    => ['limit' => $confsubmissions->titlelimit, 'type' => $confsubmissions->titlelimittype],
-    'abstract' => ['limit' => $confsubmissions->abstractlimit, 'type' => $confsubmissions->abstractlimittype],
+    'title'    => ['maxwords' => $confsubmissions->titlemaxwords, 'maxchars' => $confsubmissions->titlemaxchars],
+    'abstract' => ['maxwords' => $confsubmissions->abstractmaxwords, 'maxchars' => $confsubmissions->abstractmaxchars],
 ];
 foreach ($countedfields as $fieldname => $conf) {
-    if ((int) $conf['limit'] > 0) {
+    if ((int) $conf['maxwords'] > 0 || (int) $conf['maxchars'] > 0) {
         $PAGE->requires->js_call_amd('mod_confsubmissions/limitcounter', 'init', [
             'id_' . $fieldname,
-            (int) $conf['limit'],
-            $conf['type'],
+            (int) $conf['maxwords'],
+            (int) $conf['maxchars'],
         ]);
     }
 }

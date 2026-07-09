@@ -75,13 +75,13 @@ final class submission_form_test extends advanced_testcase {
     }
 
     /**
-     * A title within a character-mode limit passes; one over it fails, with the error
+     * A title within a character limit passes; one over it fails, with the error
      * attached to the 'title' field.
      */
     public function test_title_character_limit_enforced(): void {
         $this->resetAfterTest();
 
-        $form = $this->build_form((object) ['titlelimit' => 10, 'titlelimittype' => 'chars']);
+        $form = $this->build_form((object) ['titlemaxchars' => 10]);
 
         $errors = $form->validation($this->base_data('short', 'Abstract text'), []);
         $this->assertArrayNotHasKey('title', $errors);
@@ -91,12 +91,12 @@ final class submission_form_test extends advanced_testcase {
     }
 
     /**
-     * A title within a word-mode limit passes; one over it fails.
+     * A title within a word limit passes; one over it fails.
      */
     public function test_title_word_limit_enforced(): void {
         $this->resetAfterTest();
 
-        $form = $this->build_form((object) ['titlelimit' => 3, 'titlelimittype' => 'words']);
+        $form = $this->build_form((object) ['titlemaxwords' => 3]);
 
         $errors = $form->validation($this->base_data('one two three', 'Abstract text'), []);
         $this->assertArrayNotHasKey('title', $errors);
@@ -106,13 +106,43 @@ final class submission_form_test extends advanced_testcase {
     }
 
     /**
-     * An abstract within a character-mode limit passes; one over it fails, with the
+     * A title can have BOTH a word limit and a character limit at once (user
+     * request, 2026-07-09), enforced independently: violating either one fails,
+     * and violating both at once still produces a single combined error.
+     */
+    public function test_title_word_and_character_limits_enforced_independently(): void {
+        $this->resetAfterTest();
+
+        $form = $this->build_form((object) ['titlemaxwords' => 5, 'titlemaxchars' => 100]);
+
+        // Within both limits.
+        $errors = $form->validation($this->base_data('one two three', 'Abstract text'), []);
+        $this->assertArrayNotHasKey('title', $errors);
+
+        // Exceeds only the word limit.
+        $errors = $form->validation($this->base_data('one two three four five six', 'Abstract text'), []);
+        $this->assertArrayHasKey('title', $errors);
+
+        // Exceeds only the character limit: one single (unspaced) word, so the
+        // word count stays at 1, but its length alone exceeds 100 characters.
+        $errors = $form->validation($this->base_data(str_repeat('x', 150), 'Abstract text'), []);
+        $this->assertArrayHasKey('title', $errors);
+
+        // Exceeds both at once -- still a single error, mentioning both.
+        $errors = $form->validation($this->base_data(str_repeat('superlongword ', 20), 'Abstract text'), []);
+        $this->assertArrayHasKey('title', $errors);
+        $this->assertStringContainsString('words', $errors['title']);
+        $this->assertStringContainsString('characters', $errors['title']);
+    }
+
+    /**
+     * An abstract within a character limit passes; one over it fails, with the
      * error attached to the 'abstract' field. A limit of 0 means unlimited.
      */
     public function test_abstract_character_limit_enforced(): void {
         $this->resetAfterTest();
 
-        $form = $this->build_form((object) ['abstractlimit' => 20, 'abstractlimittype' => 'chars']);
+        $form = $this->build_form((object) ['abstractmaxchars' => 20]);
 
         $errors = $form->validation($this->base_data('Title', 'A short abstract'), []);
         $this->assertArrayNotHasKey('abstract', $errors);
@@ -120,18 +150,18 @@ final class submission_form_test extends advanced_testcase {
         $errors = $form->validation($this->base_data('Title', str_repeat('x', 50)), []);
         $this->assertArrayHasKey('abstract', $errors);
 
-        $unlimited = $this->build_form((object) ['abstractlimit' => 0, 'abstractlimittype' => 'chars']);
+        $unlimited = $this->build_form((object) ['abstractmaxchars' => 0]);
         $errors = $unlimited->validation($this->base_data('Title', str_repeat('x', 5000)), []);
         $this->assertArrayNotHasKey('abstract', $errors);
     }
 
     /**
-     * An abstract within a word-mode limit passes; one over it fails.
+     * An abstract within a word limit passes; one over it fails.
      */
     public function test_abstract_word_limit_enforced(): void {
         $this->resetAfterTest();
 
-        $form = $this->build_form((object) ['abstractlimit' => 5, 'abstractlimittype' => 'words']);
+        $form = $this->build_form((object) ['abstractmaxwords' => 5]);
 
         $errors = $form->validation($this->base_data('Title', 'one two three four five'), []);
         $this->assertArrayNotHasKey('abstract', $errors);
@@ -147,7 +177,7 @@ final class submission_form_test extends advanced_testcase {
     public function test_needs_at_least_one_speaker(): void {
         $this->resetAfterTest();
 
-        $form = $this->build_form((object) ['titlelimit' => 0, 'abstractlimit' => 0]);
+        $form = $this->build_form((object) ['titlemaxchars' => 0, 'abstractmaxchars' => 0]);
 
         $data = $this->base_data('Title', 'Abstract');
         $data['speakermanual'] = [];
@@ -168,8 +198,8 @@ final class submission_form_test extends advanced_testcase {
         $course = $this->getDataGenerator()->create_course();
         $instance = $this->getDataGenerator()->create_module('confsubmissions', [
             'course'      => $course->id,
-            'titlelimit'  => 0,
-            'abstractlimit' => 0,
+            'titlemaxchars'  => 0,
+            'abstractmaxchars' => 0,
         ]);
         $cm = get_coursemodule_from_instance('confsubmissions', $instance->id);
 
@@ -205,7 +235,7 @@ final class submission_form_test extends advanced_testcase {
 
         $course = $this->getDataGenerator()->create_course();
         $instance = $this->getDataGenerator()->create_module('confsubmissions', [
-            'course' => $course->id, 'titlelimit' => 0, 'abstractlimit' => 0,
+            'course' => $course->id, 'titlemaxchars' => 0, 'abstractmaxchars' => 0,
         ]);
         $cm = get_coursemodule_from_instance('confsubmissions', $instance->id);
 
@@ -234,7 +264,7 @@ final class submission_form_test extends advanced_testcase {
 
         $course = $this->getDataGenerator()->create_course();
         $instance = $this->getDataGenerator()->create_module('confsubmissions', [
-            'course' => $course->id, 'titlelimit' => 0, 'abstractlimit' => 0,
+            'course' => $course->id, 'titlemaxchars' => 0, 'abstractmaxchars' => 0,
         ]);
         $cm = get_coursemodule_from_instance('confsubmissions', $instance->id);
 
@@ -264,7 +294,7 @@ final class submission_form_test extends advanced_testcase {
     public function test_submissiontypeid_optional_when_none_configured(): void {
         $this->resetAfterTest();
 
-        $form = $this->build_form((object) ['titlelimit' => 0, 'abstractlimit' => 0]);
+        $form = $this->build_form((object) ['titlemaxchars' => 0, 'abstractmaxchars' => 0]);
 
         $data = $this->base_data('Title', 'Abstract');
         $errors = $form->validation($data, []);
@@ -281,7 +311,7 @@ final class submission_form_test extends advanced_testcase {
 
         $course = $this->getDataGenerator()->create_course();
         $instance = $this->getDataGenerator()->create_module('confsubmissions', [
-            'course' => $course->id, 'titlelimit' => 0, 'abstractlimit' => 0,
+            'course' => $course->id, 'titlemaxchars' => 0, 'abstractmaxchars' => 0,
         ]);
         $cm = get_coursemodule_from_instance('confsubmissions', $instance->id);
 
@@ -315,7 +345,7 @@ final class submission_form_test extends advanced_testcase {
     public function test_too_many_speakers_rejected(): void {
         $this->resetAfterTest();
 
-        $form = $this->build_form((object) ['titlelimit' => 0, 'abstractlimit' => 0]);
+        $form = $this->build_form((object) ['titlemaxchars' => 0, 'abstractmaxchars' => 0]);
 
         $data = [
             'title' => 'Title', 'abstract' => 'Abstract', 'trackid' => 0,
@@ -477,8 +507,8 @@ final class submission_form_test extends advanced_testcase {
         $course = $this->getDataGenerator()->create_course();
         $instance = $this->getDataGenerator()->create_module('confsubmissions', [
             'course'              => $course->id,
-            'titlelimit'          => 0,
-            'abstractlimit'       => 0,
+            'titlemaxchars'          => 0,
+            'abstractmaxchars'       => 0,
             'conferencestart'     => strtotime('2026-09-03 09:00:00'),
             'conferenceend'       => strtotime('2026-09-05 17:00:00'),
             'offerpreferreddates' => 1,
@@ -536,8 +566,8 @@ final class submission_form_test extends advanced_testcase {
         $course = $this->getDataGenerator()->create_course();
         $instance = $this->getDataGenerator()->create_module('confsubmissions', [
             'course'              => $course->id,
-            'titlelimit'          => 0,
-            'abstractlimit'       => 0,
+            'titlemaxchars'          => 0,
+            'abstractmaxchars'       => 0,
             'conferencestart'     => strtotime('2026-09-03 09:00:00'),
             'conferenceend'       => strtotime('2026-09-05 17:00:00'),
             'offerpreferreddates' => 1,

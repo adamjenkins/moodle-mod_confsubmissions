@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" ?>
-<XMLDB PATH="mod/confsubmissions/db" VERSION="2026070800" COMMENT="XMLDB file for Moodle mod/confsubmissions"
+<XMLDB PATH="mod/confsubmissions/db" VERSION="2026070902" COMMENT="XMLDB file for Moodle mod/confsubmissions"
     xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
     xsi:noNamespaceSchemaLocation="../../../lib/xmldb/xmldb.xsd">
   <TABLES>
@@ -12,15 +12,15 @@
         <FIELD NAME="introformat" TYPE="int" LENGTH="4" NOTNULL="true" SEQUENCE="false" DEFAULT="0" COMMENT="Format of the intro field"/>
         <FIELD NAME="timeopen" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" DEFAULT="0" COMMENT="Timestamp submissions open; 0 means no restriction"/>
         <FIELD NAME="timeclose" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" DEFAULT="0" COMMENT="Timestamp submissions close; 0 means no restriction"/>
-        <FIELD NAME="titlelimit" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" DEFAULT="0" COMMENT="Maximum title length; 0 means unlimited"/>
-        <FIELD NAME="titlelimittype" TYPE="char" LENGTH="10" NOTNULL="true" SEQUENCE="false" DEFAULT="chars" COMMENT="chars or words"/>
-        <FIELD NAME="abstractlimit" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" DEFAULT="0" COMMENT="Maximum abstract length; 0 means unlimited"/>
-        <FIELD NAME="abstractlimittype" TYPE="char" LENGTH="10" NOTNULL="true" SEQUENCE="false" DEFAULT="chars" COMMENT="chars or words"/>
+        <FIELD NAME="titlemaxwords" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" DEFAULT="0" COMMENT="Maximum title length in words; 0 means unlimited. Independent of titlemaxchars -- both may be set at once (2026-07-09 user request: a word count for English and a character count for Zenkaku Japanese applicable to the same field), replacing the old single titlelimit/titlelimittype pair (see db/upgrade.php's 2026070902 migration step)"/>
+        <FIELD NAME="titlemaxchars" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" DEFAULT="0" COMMENT="Maximum title length in characters; 0 means unlimited. Independent of titlemaxwords -- see that field's comment"/>
+        <FIELD NAME="abstractmaxwords" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" DEFAULT="0" COMMENT="Maximum abstract length in words; 0 means unlimited. Independent of abstractmaxchars -- see titlemaxwords's comment for the full reasoning"/>
+        <FIELD NAME="abstractmaxchars" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" DEFAULT="0" COMMENT="Maximum abstract length in characters; 0 means unlimited. Independent of abstractmaxwords -- see titlemaxwords's comment"/>
         <FIELD NAME="conferencestart" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" DEFAULT="0" COMMENT="Timestamp the conference starts; 0 means unset. Not required (unlike mod_confscheduler's own field of the same name) -- only used here to generate the day range for offerpreferreddates' checkboxes"/>
         <FIELD NAME="conferenceend" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" DEFAULT="0" COMMENT="Timestamp the conference ends; 0 means unset"/>
         <FIELD NAME="offerpreferreddates" TYPE="int" LENGTH="1" NOTNULL="true" SEQUENCE="false" DEFAULT="0" COMMENT="Whether the submission form offers a submitter a set of preferred-date checkboxes (one per day in the conferencestart/conferenceend range), all checked by default. Requires both conference dates to be set"/>
         <FIELD NAME="disableddates" TYPE="text" NOTNULL="false" SEQUENCE="false" COMMENT="JSON array of {date, reason} objects (date: a local-midnight timestamp, a subset of api::get_conference_days()'s range; reason: optional free text, '' means none given -- format changed from a plain comma-separated timestamp list, user request 2026-07-09, see db/upgrade.php's 2026070800 migration step) identifying days a regular submitter is not offered as a preferred date; a user with mod/confsubmissions:manageform (editingteacher+) still sees and can select every day, disabled or not. Null/empty means no day is disabled"/>
-        <FIELD NAME="notificationsenabled" TYPE="int" LENGTH="1" NOTNULL="true" SEQUENCE="false" DEFAULT="1" COMMENT="Master switch (user request, 2026-07-06): when 0, this instance's notifier never sends anything (created/withdrawn), regardless of any per-type template configuration. Defaults to 1 (enabled) so existing instances keep their current behaviour"/>
+        <FIELD NAME="notificationsenabled" TYPE="int" LENGTH="1" NOTNULL="true" SEQUENCE="false" DEFAULT="0" COMMENT="Master switch (user request, 2026-07-06): when 0, this instance's notifier never sends anything (created/withdrawn), regardless of any per-type template configuration. Defaults to 0 (disabled) as of 2026-07-09 -- an organiser must explicitly opt in per instance; this default only applies to newly-created instances, existing instances' stored values are untouched by the upgrade step that changed it"/>
         <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" DEFAULT="0"/>
         <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" DEFAULT="0"/>
       </FIELDS>

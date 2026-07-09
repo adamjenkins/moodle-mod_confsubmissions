@@ -24,6 +24,11 @@ import {getString} from 'core/str';
  * string length; words: the string trimmed then split on whitespace, empty
  * tokens discarded).
  *
+ * 2026-07-09: a field may now have a word limit, a character limit, both, or
+ * neither, independently (0 means unlimited for that one) -- the counter
+ * shows both counts at once and highlights whichever one is exceeded, rather
+ * than assuming exactly one "mode" per field.
+ *
  * @module     mod_confsubmissions/limitcounter
  * @copyright  2026 Adam Jenkins <adam@wisecat.net>
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
@@ -69,16 +74,36 @@ const getOrCreateCounterElement = (field, fieldId) => {
 };
 
 /**
- * Sets up a live character/word counter on a form field.
+ * Builds one metric's "N / limit unit" segment, with its own independent
+ * exceeded/ok styling.
  *
- * Skipped entirely (not called) by the form when the configured limit for
- * that field is 0 (unlimited).
+ * @param {String} value The field's current text
+ * @param {Number} maxvalue The configured limit for this metric; 0 means unlimited
+ * @param {String} limitType Either "chars" or "words"
+ * @param {String} unitLabel The already-loaded unit label (e.g. "words")
+ * @return {{text: String, exceeded: Boolean}}
+ */
+const renderMetric = (value, maxvalue, limitType, unitLabel) => {
+    const current = count(value, limitType);
+    return {
+        text: `${current} / ${maxvalue} ${unitLabel}`,
+        exceeded: current > maxvalue,
+    };
+};
+
+/**
+ * Sets up a live character/word counter on a form field, showing whichever of
+ * the two independent limits (maxwords, maxchars) are actually configured for
+ * it (0 means unlimited, i.e. not shown).
+ *
+ * Skipped entirely (not called) by the form when BOTH configured limits for
+ * that field are 0 (unlimited).
  *
  * @param {String} fieldId The id of the input/textarea element to watch
- * @param {Number} limit The configured limit (always > 0 when this is called)
- * @param {String} limitType Either "chars" or "words"
+ * @param {Number} maxwords The configured word limit; 0 means unlimited/not shown
+ * @param {Number} maxchars The configured character limit; 0 means unlimited/not shown
  */
-export const init = (fieldId, limit, limitType) => {
+export const init = (fieldId, maxwords, maxchars) => {
     const field = document.getElementById(fieldId);
     if (!field) {
         return;
@@ -86,12 +111,28 @@ export const init = (fieldId, limit, limitType) => {
 
     const counter = getOrCreateCounterElement(field, fieldId);
 
-    getString('limittype_' + limitType, 'mod_confsubmissions').then(unitLabel => {
+    Promise.all([
+        getString('limittype_words', 'mod_confsubmissions'),
+        getString('limittype_chars', 'mod_confsubmissions'),
+    ]).then(([wordsLabel, charsLabel]) => {
         const render = () => {
-            const current = count(field.value, limitType);
-            counter.textContent = `${current} / ${limit} ${unitLabel}`;
-            counter.classList.toggle('text-danger', current > limit);
-            counter.classList.toggle('text-muted', current <= limit);
+            const segments = [];
+            let exceeded = false;
+
+            if (maxwords > 0) {
+                const metric = renderMetric(field.value, maxwords, 'words', wordsLabel);
+                segments.push(metric.text);
+                exceeded = exceeded || metric.exceeded;
+            }
+            if (maxchars > 0) {
+                const metric = renderMetric(field.value, maxchars, 'chars', charsLabel);
+                segments.push(metric.text);
+                exceeded = exceeded || metric.exceeded;
+            }
+
+            counter.textContent = segments.join(' · ');
+            counter.classList.toggle('text-danger', exceeded);
+            counter.classList.toggle('text-muted', !exceeded);
         };
 
         field.addEventListener('input', render);
@@ -99,7 +140,7 @@ export const init = (fieldId, limit, limitType) => {
 
         return null;
     }).catch(() => {
-        // If the string fails to load, silently skip the live counter; server-side
-        // validation still enforces the limit regardless.
+        // If the strings fail to load, silently skip the live counter; server-side
+        // validation still enforces the limit(s) regardless.
     });
 };

@@ -2,6 +2,29 @@
 
 ## Unreleased
 
+- Notifications default + independent title/abstract limits (2026-07-09,
+  user-requested):
+  - **`notificationsenabled` now defaults to off** for newly created
+    instances (existing instances are untouched by the upgrade step). This
+    plugin's notifications remain immediate/synchronous — no pending queue
+    or dedup logic was added here, since its events (submission created,
+    submission withdrawn) are one-off, not deferred.
+  - **Title/abstract limits are now an independent word count and character
+    count per field**, instead of one limit value plus a chars-or-words
+    type selector. `titlelimit`/`titlelimittype`/`abstractlimit`/
+    `abstractlimittype` are replaced with `titlemaxwords`, `titlemaxchars`,
+    `abstractmaxwords`, `abstractmaxchars` — each independently optional (0
+    = unlimited), so e.g. a title can have both a 15-word cap and a 200-
+    character cap enforced at once (useful for mixed English/Zenkaku
+    Japanese content). Upgrade step `2026070902` backfills each instance's
+    existing single limit into its matching new column (chars into
+    `*maxchars`, words into `*maxwords`), leaving the other side
+    unlimited, then drops the old columns. The live JS counter
+    (`limitcounter.js`) shows whichever of the two limits are configured
+    at once (e.g. "3 / 5 words · 120 / 100 characters") and highlights
+    whichever is exceeded; server-side validation
+    (`submission_form.php::validation()`) checks both independently and
+    reports a combined message when more than one is violated.
 - Review fixes (2026-07-09, from the four-plugin FABLE.md review — see the
   coordination repo). All are behaviour fixes; none change any `api.php` method
   signature (only additive bulk methods are new):

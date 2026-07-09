@@ -50,7 +50,7 @@ class backup_confsubmissions_activity_structure_step extends backup_activity_str
 
         $confsubmissions = new backup_nested_element('confsubmissions', ['id'], [
             'name', 'intro', 'introformat', 'timeopen', 'timeclose',
-            'titlelimit', 'titlelimittype', 'abstractlimit', 'abstractlimittype',
+            'titlemaxwords', 'titlemaxchars', 'abstractmaxwords', 'abstractmaxchars',
             'conferencestart', 'conferenceend', 'offerpreferreddates', 'disableddates',
             'notificationsenabled', 'timecreated', 'timemodified',
         ]);

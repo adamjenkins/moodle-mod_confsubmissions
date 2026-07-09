@@ -53,6 +53,9 @@ final class notifier_test extends advanced_testcase {
 
         $course = $this->getDataGenerator()->create_course();
         $confsubmissions = $this->getDataGenerator()->create_module('confsubmissions', ['course' => $course->id]);
+        // notificationsenabled defaults to 0 (2026-07-09) -- explicitly enable it since
+        // this test exercises actual sending.
+        $DB->set_field('confsubmissions', 'notificationsenabled', 1, ['id' => $confsubmissions->id]);
         $speaker = $this->getDataGenerator()->create_user();
 
         $submissionid = (int) $DB->insert_record('confsubmissions_submission', (object) [
@@ -93,6 +96,9 @@ final class notifier_test extends advanced_testcase {
 
         $course = $this->getDataGenerator()->create_course();
         $confsubmissions = $this->getDataGenerator()->create_module('confsubmissions', ['course' => $course->id]);
+        // notificationsenabled defaults to 0 (2026-07-09) -- explicitly enable it since
+        // this test exercises actual sending.
+        $DB->set_field('confsubmissions', 'notificationsenabled', 1, ['id' => $confsubmissions->id]);
         $speaker = $this->getDataGenerator()->create_user();
         $teacher = $this->getDataGenerator()->create_user();
         $this->getDataGenerator()->enrol_user($teacher->id, $course->id, 'editingteacher');

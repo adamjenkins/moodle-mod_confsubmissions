@@ -79,42 +79,20 @@ class mod_confsubmissions_mod_form extends moodleform_mod {
         $mform->setDefault('timeclose', 0);
         $mform->addHelpButton('timeclose', 'timeclose', 'mod_confsubmissions');
 
-        $limittypes = [
-            'chars' => get_string('limittype_chars', 'mod_confsubmissions'),
-            'words' => get_string('limittype_words', 'mod_confsubmissions'),
-        ];
-
-        $titlegroup = [
-            $mform->createElement('text', 'titlelimit', '', ['size' => 6]),
-            $mform->createElement('select', 'titlelimittype', '', $limittypes),
-        ];
-        $mform->addGroup(
-            $titlegroup,
-            'titlelimitgroup',
-            get_string('titlelimit', 'mod_confsubmissions'),
-            [' '],
-            false
-        );
-        $mform->setType('titlelimit', PARAM_INT);
-        $mform->setDefault('titlelimit', 0);
-        $mform->setDefault('titlelimittype', 'chars');
-        $mform->addHelpButton('titlelimitgroup', 'titlelimit', 'mod_confsubmissions');
-
-        $abstractgroup = [
-            $mform->createElement('text', 'abstractlimit', '', ['size' => 6]),
-            $mform->createElement('select', 'abstractlimittype', '', $limittypes),
-        ];
-        $mform->addGroup(
-            $abstractgroup,
-            'abstractlimitgroup',
-            get_string('abstractlimit', 'mod_confsubmissions'),
-            [' '],
-            false
-        );
-        $mform->setType('abstractlimit', PARAM_INT);
-        $mform->setDefault('abstractlimit', 0);
-        $mform->setDefault('abstractlimittype', 'chars');
-        $mform->addHelpButton('abstractlimitgroup', 'abstractlimit', 'mod_confsubmissions');
+        // Two independent limits per field (user request, 2026-07-09: a word count
+        // for English and a character count for Zenkaku Japanese applicable to the
+        // same field at once), replacing the old single limit+type pair. Each is its
+        // own plain number input; 0 means unlimited, and either, both, or neither may
+        // be set per field.
+        foreach (['title', 'abstract'] as $fieldname) {
+            foreach (['maxwords', 'maxchars'] as $suffix) {
+                $name = $fieldname . $suffix;
+                $mform->addElement('text', $name, get_string($name, 'mod_confsubmissions'), ['size' => 6]);
+                $mform->setType($name, PARAM_INT);
+                $mform->setDefault($name, 0);
+                $mform->addHelpButton($name, $name, 'mod_confsubmissions');
+            }
+        }
 
         // Conference dates: unlike mod_confscheduler's own conferencestart/conferenceend
         // (required there -- they drive the schedule grid's day range), these are
@@ -177,12 +155,10 @@ class mod_confsubmissions_mod_form extends moodleform_mod {
             $errors['timeclose'] = get_string('error:closebeforeopen', 'mod_confsubmissions');
         }
 
-        if ((int) ($data['titlelimit'] ?? 0) < 0) {
-            $errors['titlelimitgroup'] = get_string('error:limitnegative', 'mod_confsubmissions');
-        }
-
-        if ((int) ($data['abstractlimit'] ?? 0) < 0) {
-            $errors['abstractlimitgroup'] = get_string('error:limitnegative', 'mod_confsubmissions');
+        foreach (['titlemaxwords', 'titlemaxchars', 'abstractmaxwords', 'abstractmaxchars'] as $name) {
+            if ((int) ($data[$name] ?? 0) < 0) {
+                $errors[$name] = get_string('error:limitnegative', 'mod_confsubmissions');
+            }
         }
 
         if (

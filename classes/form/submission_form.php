@@ -441,20 +441,22 @@ class submission_form extends \moodleform {
             }
         }
 
-        if (limits::exceeds($data['title'] ?? '', (int) $cs->titlelimit, $cs->titlelimittype)) {
-            $errors['title'] = get_string('error:titletoolong', 'mod_confsubmissions', [
-                'limit' => $cs->titlelimit,
-                'type'  => get_string('limittype_' . $cs->titlelimittype, 'mod_confsubmissions'),
-                'count' => limits::count($data['title'] ?? '', $cs->titlelimittype),
-            ]);
+        $titleviolation = self::describe_limit_violations(
+            $data['title'] ?? '',
+            (int) ($cs->titlemaxwords ?? 0),
+            (int) ($cs->titlemaxchars ?? 0)
+        );
+        if ($titleviolation !== '') {
+            $errors['title'] = get_string('error:titletoolong', 'mod_confsubmissions', $titleviolation);
         }
 
-        if (limits::exceeds($data['abstract'] ?? '', (int) $cs->abstractlimit, $cs->abstractlimittype)) {
-            $errors['abstract'] = get_string('error:abstracttoolong', 'mod_confsubmissions', [
-                'limit' => $cs->abstractlimit,
-                'type'  => get_string('limittype_' . $cs->abstractlimittype, 'mod_confsubmissions'),
-                'count' => limits::count($data['abstract'] ?? '', $cs->abstractlimittype),
-            ]);
+        $abstractviolation = self::describe_limit_violations(
+            $data['abstract'] ?? '',
+            (int) ($cs->abstractmaxwords ?? 0),
+            (int) ($cs->abstractmaxchars ?? 0)
+        );
+        if ($abstractviolation !== '') {
+            $errors['abstract'] = get_string('error:abstracttoolong', 'mod_confsubmissions', $abstractviolation);
         }
 
         $speakercount = 0;
@@ -498,6 +500,40 @@ class submission_form extends \moodleform {
         }
 
         return $errors;
+    }
+
+    /**
+     * Builds a human-readable description of every limit a value violates -- a
+     * field can independently exceed a word limit, a character limit, or both at
+     * once (user request, 2026-07-09: a word count for English and a character
+     * count for Zenkaku Japanese applicable to the same field). Returns '' if the
+     * value violates neither configured limit.
+     *
+     * @param string $value The submitted text to check
+     * @param int $maxwords The configured word limit; 0 means unlimited
+     * @param int $maxchars The configured character limit; 0 means unlimited
+     * @return string One sentence per violated limit, joined with a space; '' if none
+     */
+    private static function describe_limit_violations(string $value, int $maxwords, int $maxchars): string {
+        $violations = [];
+
+        if (limits::exceeds($value, $maxwords, limits::TYPE_WORDS)) {
+            $violations[] = get_string('limitviolation', 'mod_confsubmissions', (object) [
+                'limit' => $maxwords,
+                'type'  => get_string('limittype_words', 'mod_confsubmissions'),
+                'count' => limits::count($value, limits::TYPE_WORDS),
+            ]);
+        }
+
+        if (limits::exceeds($value, $maxchars, limits::TYPE_CHARS)) {
+            $violations[] = get_string('limitviolation', 'mod_confsubmissions', (object) [
+                'limit' => $maxchars,
+                'type'  => get_string('limittype_chars', 'mod_confsubmissions'),
+                'count' => limits::count($value, limits::TYPE_CHARS),
+            ]);
+        }
+
+        return implode(' ', $violations);
     }
 
     /**

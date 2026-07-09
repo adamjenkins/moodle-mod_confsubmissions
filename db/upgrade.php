@@ -344,5 +344,104 @@ function xmldb_confsubmissions_upgrade($oldversion) {
         upgrade_mod_savepoint(true, 2026070800, 'confsubmissions');
     }
 
+    if ($oldversion < 2026070901) {
+        // Notifications master switch default flipped 1 -> 0 (user request,
+        // 2026-07-09): new instances now default to notifications OFF. Existing
+        // instances' stored notificationsenabled values are deliberately left
+        // untouched -- only the column's default (used by the next INSERT with
+        // no explicit value) changes.
+        $table = new xmldb_table('confsubmissions');
+        $field = new xmldb_field(
+            'notificationsenabled',
+            XMLDB_TYPE_INTEGER,
+            '1',
+            null,
+            XMLDB_NOTNULL,
+            null,
+            '0',
+            'disableddates'
+        );
+        if ($dbman->field_exists($table, $field)) {
+            $dbman->change_field_default($table, $field);
+        }
+
+        upgrade_mod_savepoint(true, 2026070901, 'confsubmissions');
+    }
+
+    if ($oldversion < 2026070902) {
+        // Independent word + character limits per field (user request,
+        // 2026-07-09): titlelimit/titlelimittype and abstractlimit/
+        // abstractlimittype (a single limit, either chars OR words) are
+        // replaced with two independent columns per field, so both a word
+        // count (e.g. for English) and a character count (e.g. for Zenkaku
+        // Japanese) can apply to the same field at once -- see
+        // classes/local/limits.php (count()/exceeds() were already generic
+        // per type, so no change needed there) and
+        // classes/form/submission_form.php's validation().
+        $table = new xmldb_table('confsubmissions');
+
+        $field = new xmldb_field('titlemaxwords', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0', 'timeclose');
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+        $field = new xmldb_field(
+            'titlemaxchars',
+            XMLDB_TYPE_INTEGER,
+            '10',
+            null,
+            XMLDB_NOTNULL,
+            null,
+            '0',
+            'titlemaxwords'
+        );
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+        $field = new xmldb_field(
+            'abstractmaxwords',
+            XMLDB_TYPE_INTEGER,
+            '10',
+            null,
+            XMLDB_NOTNULL,
+            null,
+            '0',
+            'titlemaxchars'
+        );
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+        $field = new xmldb_field(
+            'abstractmaxchars',
+            XMLDB_TYPE_INTEGER,
+            '10',
+            null,
+            XMLDB_NOTNULL,
+            null,
+            '0',
+            'abstractmaxwords'
+        );
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+
+        // One-time backfill: keep each existing single limit under its matching
+        // new column (chars -> maxchars, words -> maxwords), leaving the other
+        // side at its default 0 (unlimited) -- no behaviour change for existing
+        // instances until an organiser explicitly configures the second cap.
+        if ($dbman->field_exists($table, new xmldb_field('titlelimit'))) {
+            $DB->execute("UPDATE {confsubmissions} SET titlemaxwords = titlelimit WHERE titlelimittype = 'words'");
+            $DB->execute("UPDATE {confsubmissions} SET titlemaxchars = titlelimit WHERE titlelimittype = 'chars'");
+            $DB->execute("UPDATE {confsubmissions} SET abstractmaxwords = abstractlimit WHERE abstractlimittype = 'words'");
+            $DB->execute("UPDATE {confsubmissions} SET abstractmaxchars = abstractlimit WHERE abstractlimittype = 'chars'");
+
+            $dbman->drop_field($table, new xmldb_field('titlelimit'));
+            $dbman->drop_field($table, new xmldb_field('titlelimittype'));
+            $dbman->drop_field($table, new xmldb_field('abstractlimit'));
+            $dbman->drop_field($table, new xmldb_field('abstractlimittype'));
+        }
+
+        upgrade_mod_savepoint(true, 2026070902, 'confsubmissions');
+    }
+
     return true;
 }
