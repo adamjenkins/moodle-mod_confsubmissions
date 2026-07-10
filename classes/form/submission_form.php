@@ -211,12 +211,13 @@ class submission_form extends \moodleform {
 
                 $label = userdate($day, get_string('strftimedate', 'langconfig'));
                 if ($isdisableddate && !empty($disabledreasons[$day])) {
-                    // s() escapes the organiser-entered reason before it goes into this
-                    // HTML label: unlike most content in this project (rendered through
-                    // format_string()/format_text()), a moodleform element label is
-                    // output as trusted HTML, so an unescaped reason would be a stored
-                    // XSS reachable by anyone holding mod/confsubmissions:manageform.
-                    $label .= ' (' . s($disabledreasons[$day]) . ')';
+                    // Uses format_string(), not s(): a moodleform element label is output
+                    // as trusted HTML, so the organiser-entered reason still needs
+                    // escaping before it goes in -- format_string()'s default behaviour
+                    // does that (same XSS-safety s() was chosen for) while additionally
+                    // running filters, so a <span lang="xx" class="multilang"> reason is
+                    // correctly filtered instead of rendering as literal escaped markup.
+                    $label .= ' (' . format_string($disabledreasons[$day], true) . ')';
                 }
 
                 $mform->addElement(

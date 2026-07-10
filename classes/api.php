@@ -122,15 +122,27 @@ class api {
             throw new \invalid_parameter_exception(get_string('error:invalidstatus', 'mod_confsubmissions'));
         }
 
+        // Capture the status a submission had immediately before being withdrawn, so
+        // Unwithdraw (view.php) can restore it instead of hardcoding 'submitted'.
+        // Cleared again on any transition away from 'withdrawn' -- it's only ever
+        // meaningful while the row is currently withdrawn.
+        $update = (object) [
+            'id'           => $submissionid,
+            'status'       => $status,
+            'timemodified' => time(),
+        ];
+        if ($status === 'withdrawn') {
+            $current = $DB->get_field('confsubmissions_submission', 'status', ['id' => $submissionid], MUST_EXIST);
+            $update->statusbeforewithdraw = $current;
+        } else {
+            $update->statusbeforewithdraw = null;
+        }
+
         // Use update_record(), not set_field(): a status change is a genuine modification
         // a submitter should see reflected in their own "my submissions" list (which
         // shows timemodified), not a silent backend touch -- caught by a
         // moodle-reviewer pass.
-        $DB->update_record('confsubmissions_submission', (object) [
-            'id'           => $submissionid,
-            'status'       => $status,
-            'timemodified' => time(),
-        ]);
+        $DB->update_record('confsubmissions_submission', $update);
 
         // A "withdrawn" status is only ever set here from view.php's own
         // user-initiated withdraw action -- mod_confprogram's decision-sync call
@@ -284,6 +296,65 @@ class api {
         );
         foreach ($speakers as $speaker) {
             $result[(int) $speaker->submissionid][] = $speaker;
+        }
+
+        return $result;
+    }
+
+    /**
+     * Returns ready-to-display speaker names for many submissions in one query.
+     *
+     * The single shared resolver every caller across this plugin and its
+     * downstream consumers (mod_confprogram, mod_confscheduler) should use
+     * instead of independently re-implementing "resolve userid -> fullname(),
+     * fall back to the manually-entered name, never show the raw id" — that
+     * logic was previously duplicated 6+ times across the plugin suite, which
+     * is exactly the shape of bug that regresses silently (a new/edited call
+     * site forgetting the core_user lookup or its fallback). Every requested
+     * id is present in the result (as an empty array when the submission has
+     * no speakers), so callers can index without isset() checks.
+     *
+     * @param int[] $submissionids The confsubmissions_submission ids
+     * @return array<int, string[]> Map of submissionid => ordered list of display names
+     */
+    public static function get_speaker_display_names(array $submissionids): array {
+        global $DB;
+
+        $submissionids = array_values(array_unique(array_map('intval', $submissionids)));
+        if (!$submissionids) {
+            return [];
+        }
+
+        $speakersbysubmission = self::get_speakers_for_submissions($submissionids);
+
+        $userids = [];
+        foreach ($speakersbysubmission as $speakers) {
+            foreach ($speakers as $speaker) {
+                if (!empty($speaker->userid)) {
+                    $userids[] = (int) $speaker->userid;
+                }
+            }
+        }
+
+        $users = [];
+        if ($userids) {
+            $namefields = implode(', ', array_merge(['id'], \core_user\fields::for_name()->get_required_fields()));
+            $users = $DB->get_records_list('user', 'id', array_unique($userids), '', $namefields);
+        }
+
+        $result = array_fill_keys($submissionids, []);
+        foreach ($speakersbysubmission as $submissionid => $speakers) {
+            $names = [];
+            foreach ($speakers as $speaker) {
+                if (!empty($speaker->userid)) {
+                    if (isset($users[(int) $speaker->userid])) {
+                        $names[] = fullname($users[(int) $speaker->userid]);
+                    }
+                } else if (!empty($speaker->name)) {
+                    $names[] = format_string($speaker->name, true, ['escape' => false]);
+                }
+            }
+            $result[$submissionid] = $names;
         }
 
         return $result;

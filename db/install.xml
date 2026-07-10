@@ -81,6 +81,7 @@
         <FIELD NAME="trackid" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false" COMMENT="Foreign key to confsubmissions_track table; null if unassigned"/>
         <FIELD NAME="submissiontypeid" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false" COMMENT="Foreign key to confsubmissions_submissiontype table; null if unassigned (e.g. the instance has no submission types configured, or this submission predates this feature)"/>
         <FIELD NAME="status" TYPE="char" LENGTH="20" NOTNULL="true" SEQUENCE="false" DEFAULT="submitted" COMMENT="Workflow status, e.g. submitted, accepted, rejected"/>
+        <FIELD NAME="statusbeforewithdraw" TYPE="char" LENGTH="20" NOTNULL="false" SEQUENCE="false" COMMENT="The status this submission had immediately before being withdrawn; null unless status is currently 'withdrawn'. Restored by view.php's Unwithdraw action instead of hardcoding 'submitted'. Null (rather than 'submitted') for rows withdrawn before this column existed, in which case Unwithdraw falls back to 'submitted'"/>
         <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" DEFAULT="0"/>
         <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" DEFAULT="0"/>
       </FIELDS>

@@ -2,6 +2,29 @@
 
 ## Unreleased
 
+- Three user-reported fixes (2026-07-10):
+  - **Speaker fullname resolution consolidated.** Added
+    `api::get_speaker_display_names()`, a single bulk resolver used by every
+    downstream consumer that renders a joined speaker-name string
+    (`mod_confprogram\field_formatter`, `mod_confscheduler\grid_data`) instead
+    of each independently re-implementing "resolve userid -> fullname(),
+    fall back to the manually-entered name, never show the raw id" — that
+    logic was duplicated 6+ times across the plugin suite, which is exactly
+    the shape of bug that regresses silently.
+  - **Unwithdraw now restores the submission's actual previous status**
+    (`submitted`/`accepted`/`rejected`) instead of always resetting to
+    `submitted`. A new nullable `statusbeforewithdraw` column on
+    `confsubmissions_submission` is captured by `api::set_status()` whenever
+    a row transitions to `withdrawn`, and read back (falling back to
+    `submitted` for pre-upgrade rows) by view.php's Unwithdraw handler.
+  - **Fixed: multilang filter markup in a disabled-date reason rendered as
+    literal escaped tags instead of being filtered.** `submission_form.php`
+    switched from `s()` to `format_string()` for the reason shown next to a
+    disabled preferred-date checkbox — preserves the same XSS-safe escaping
+    while additionally running filters (including multilang). Track names,
+    submission type names, and custom field names were already multilang-safe
+    end to end and needed no change.
+
 - Notifications default + independent title/abstract limits (2026-07-09,
   user-requested):
   - **`notificationsenabled` now defaults to off** for newly created

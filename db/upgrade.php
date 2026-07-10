@@ -443,5 +443,24 @@ function xmldb_confsubmissions_upgrade($oldversion) {
         upgrade_mod_savepoint(true, 2026070902, 'confsubmissions');
     }
 
+    if ($oldversion < 2026071000) {
+        $table = new xmldb_table('confsubmissions_submission');
+        $field = new xmldb_field(
+            'statusbeforewithdraw',
+            XMLDB_TYPE_CHAR,
+            '20',
+            null,
+            null,
+            null,
+            null,
+            'status'
+        );
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+
+        upgrade_mod_savepoint(true, 2026071000, 'confsubmissions');
+    }
+
     return true;
 }

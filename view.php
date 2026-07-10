@@ -150,7 +150,11 @@ if ($unwithdrawid) {
         exit;
     }
 
-    api::set_status($unwithdrawid, 'submitted');
+    // Restore whatever status the submission had immediately before it was
+    // withdrawn (accepted/rejected/submitted), falling back to 'submitted' for
+    // rows withdrawn before statusbeforewithdraw existed (pre-upgrade, null).
+    $restorestatus = $submission->statusbeforewithdraw ?? 'submitted';
+    api::set_status($unwithdrawid, $restorestatus);
     redirect($pageurl, get_string('submissionunwithdrawn', 'mod_confsubmissions'), null, \core\output\notification::NOTIFY_SUCCESS);
 }
 
