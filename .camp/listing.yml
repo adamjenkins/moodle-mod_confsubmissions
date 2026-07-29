@@ -1,0 +1,23 @@
+# camp listing manifest — descriptive content for your plugin's page.
+# Edit freely and commit; camp ingests this file at each tagged release.
+# Schema: https://camp-registry.org/schema/listing.schema.json
+name: mod_confsubmissions
+summary: 'Conference Submissions — a Moodle activity for running a call for abstracts.'
+description: |
+  Opens a call for abstracts: presenters submit a title, abstract and
+  speakers; organisers configure length limits, custom fields, tracks and
+  submission types (each with a default duration the scheduler reuses),
+  preferred-day checkboxes, and editable notification templates. Part of the
+  Conference Tools suite with `mod_confprogram` (vetting), `mod_confscheduler`
+  (scheduling) and `mod_confcheckin` (tickets and check-in).
+labels:
+  # Required disclosure labels — pick all that apply (RFC §4.7):
+  #   fully-free | freemium | paid-service | external-account
+  #   donation-supported | commercial-support-available
+  - fully-free
+# screenshots:
+#   - path: .camp/screenshots/overview.png
+#     caption: Main view
+# links:
+#   docs: https://…
+#   issues: https://…
