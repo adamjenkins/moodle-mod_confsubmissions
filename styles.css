@@ -15,7 +15,7 @@
  */
 
 .mod_confsubmissions-speaker-row {
-    border: 1px solid #dee2e6;
+    border: 1px solid var(--bs-border-color, #dee2e6);
     border-radius: 0.25rem;
     padding: 0.75rem 1rem 0.25rem;
     margin-bottom: 0.75rem;

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Declare Moodle 5.3 support (`$plugin->supported = [502, 503]`).
+- Speaker-row border (`styles.css`) now uses the theme's `--bs-border-color`
+  (falling back to the previous `#dee2e6`), so it follows Boost's dark colour mode.
+
 - Three user-reported fixes (2026-07-10):
   - **Speaker fullname resolution consolidated.** Added
     `api::get_speaker_display_names()`, a single bulk resolver used by every

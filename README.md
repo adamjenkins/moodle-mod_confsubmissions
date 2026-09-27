@@ -28,7 +28,7 @@ Other Conference Tools plugins integrate through this plugin's `classes/api.php`
 
 ## Requirements
 
-- Moodle 5.2 (`2026042000`) or later.
+- Moodle 5.2 – 5.3 (`$plugin->supported = [502, 503]`); requires Moodle 5.2 (`2026042000`).
 
 ## Installation
 
