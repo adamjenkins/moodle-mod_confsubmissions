@@ -927,8 +927,8 @@ class api {
      * optional reasons, user request, 2026-07-09) with a new set.
      *
      * @param int $confsubmissionsid The confsubmissions instance id
-     * @param array<int, string> $datestoreasons Reason text (may be '' for "no
-     *     reason given"), keyed by midnight timestamp, for every day to disable
+     * @param array $datestoreasons Reason text (may be '' for "no reason given"),
+     *     keyed by midnight timestamp (int), for every day to disable
      * @return void
      */
     public static function set_disabled_dates(int $confsubmissionsid, array $datestoreasons): void {
