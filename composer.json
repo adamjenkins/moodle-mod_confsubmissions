@@ -4,7 +4,7 @@
     "type": "moodle-mod",
     "require": {
         "moodle/moodle": "^5.2",
-        "moodle/composer-installer": "*"
+        "moodle/composer-installer": "^1.0"
     },
     "license": "GPL-3.0-or-later"
 }
