@@ -25,8 +25,8 @@
 defined('MOODLE_INTERNAL') || die();
 
 $plugin->component = 'mod_confsubmissions';
-$plugin->version   = 2026100400; // The current module version (Date: YYYYMMDDXX).
+$plugin->version   = 2026100401; // The current module version (Date: YYYYMMDDXX).
 $plugin->requires  = 2026042000; // Moodle 5.2.
 $plugin->supported = [502, 503]; // Moodle 5.2 to 5.3.
-$plugin->maturity  = MATURITY_ALPHA;
-$plugin->release   = '0.1.1';
+$plugin->maturity  = MATURITY_BETA;
+$plugin->release   = '0.1.2';
