@@ -15,9 +15,21 @@ labels:
   #   fully-free | freemium | paid-service | external-account
   #   donation-supported | commercial-support-available
   - fully-free
-# screenshots:
-#   - path: .camp/screenshots/overview.png
-#     caption: Main view
+screenshots:
+  - path: .camp/screenshots/01-all-submissions.png
+    caption: 'Organiser view: links to manage tracks, types, fields, notifications and disabled days, and every submission filterable by track and status.'
+  - path: .camp/screenshots/02-submission-form.png
+    caption: 'A presenter filling in a proposal: live word counters for the title and abstract, track, presentation type and the organiser''s custom questions.'
+  - path: .camp/screenshots/03-preferred-dates-and-speakers.png
+    caption: 'Preferred days (one disabled with its reason) and speakers: the submitter plus a guest co-presenter entered by name and email.'
+  - path: .camp/screenshots/04-my-submissions.png
+    caption: 'A presenter''s My submissions list with the published status (Accepted), Edit and Withdraw.'
+  - path: .camp/screenshots/05-submission-detail.png
+    caption: 'One submission in full: track, status, abstract, speakers and the answers to the custom fields.'
+  - path: .camp/screenshots/06-tracks.png
+    caption: Managing tracks, each with a colour and an icon.
+  - path: .camp/screenshots/07-custom-fields.png
+    caption: Custom fields of different types (short text, dropdown, checkbox), each optionally required.
 # links:
 #   docs: https://…
 #   issues: https://…
